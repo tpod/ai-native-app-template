@@ -1,0 +1,31 @@
+## Visual Studio / .NET
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+*.log
+TestResults/
+*.trx
+*.nupkg
+*.snupkg
+.idea/
+*.DotSettings.user
+launchSettings.local.json
+
+## Project specific
+src/AppTemplate.Api/wwwroot/
+*.db
+*.db-shm
+*.db-wal
+node_modules/
+.superpowers/
