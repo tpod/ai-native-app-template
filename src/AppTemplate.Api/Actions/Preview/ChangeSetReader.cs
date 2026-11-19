@@ -29,8 +29,7 @@ public static class ChangeSetReader
             }
 
             var entity = entry.Metadata.ClrType.Name;
-            var id = string.Join('|', entry.Metadata.FindPrimaryKey()!.Properties
-                .Select(p => ProviderString(Provider(entry.Property(p.Name).CurrentValue, entry.Property(p.Name)))));
+            var id = KeyOf(entry);
             foreach (var (path, property) in Flatten(entry))
             {
                 if (path == VersionProperty)
@@ -54,6 +53,11 @@ public static class ChangeSetReader
             .ThenBy(c => c.Id, StringComparer.Ordinal)
             .ThenBy(c => c.Field, StringComparer.Ordinal)];
     }
+
+    /// <summary>The entry's primary key as provider values, joined with <c>|</c>; the <c>id</c> used in <see cref="Change"/>.</summary>
+    internal static string KeyOf(EntityEntry entry)
+        => string.Join('|', entry.Metadata.FindPrimaryKey()!.Properties
+            .Select(p => ProviderString(Provider(entry.Property(p.Name).CurrentValue, entry.Property(p.Name)))));
 
     private static IEnumerable<(string Path, PropertyEntry Property)> Flatten(EntityEntry entry)
     {

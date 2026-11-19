@@ -10,6 +10,7 @@ builder.AddServiceDefaults();
 builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlite(builder.Configuration.GetConnectionString("appdb")));
 
 builder.Services.AddAppProblemDetails();
+builder.Services.AddActions();
 
 var app = builder.Build();
 
@@ -22,6 +23,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapDefaultEndpoints();
+app.MapActions();
 
 app.MapFallback("/api/{**path}", (HttpContext ctx) => AppErrorProblemDetails.ToResult(new RequestNotFound(ctx.Request.Path.Value ?? "/"), ctx));
 app.MapFallback("/mcp/{**path}", (HttpContext ctx) => AppErrorProblemDetails.ToResult(new RequestNotFound(ctx.Request.Path.Value ?? "/"), ctx));

@@ -1,4 +1,5 @@
 using AppTemplate.Api.Data;
+using AppTemplate.Api.Tests.Fixtures.Notes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,8 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace AppTemplate.Api.Tests.Infrastructure;
 
-public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncDisposable
+/// <param name="includeFixtures">Registers the Notes fixture (handlers, validators, event recorder, model contributor). Off for hosts that must see only the real app.</param>
+public sealed class ApiFactory(bool includeFixtures = true) : WebApplicationFactory<Program>, IAsyncDisposable
 {
     public const string SigningKey = "test-signing-key-0123456789abcdef-0123";
 
@@ -47,6 +49,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncDisposabl
 
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Time);
+
+            if (includeFixtures)
+            {
+                NoteFixture.Register(services);
+            }
 
             ConfigureTestServices?.Invoke(services);
         });

@@ -9,6 +9,9 @@ namespace AppTemplate.Api.Tests.Data;
 
 public sealed class ContributorHostTests : ApiTestBase
 {
+    // Without the Notes fixture, so this test's own contributor registration is the only one.
+    protected override ApiFactory CreateFactory() => new(includeFixtures: false);
+
     protected override void ConfigureServices(IServiceCollection services)
         => services.AddSingleton<IModelContributor, NoteModelContributor>();
 
