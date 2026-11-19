@@ -19,7 +19,9 @@ internal sealed class SqliteTestDatabase : IDisposable
 
     public void Migrate(params IModelContributor[] contributors)
     {
-        using var context = NewContext(contributors);
+        // Migrate with the base model: contributor entities are not in the migration snapshot and would trip
+        // the pending-model-changes check. Their tables come from SchemaSql instead.
+        using var context = NewContext();
         Migrate(context, contributors);
     }
 
