@@ -49,11 +49,14 @@ public static class ProblemDetailsSetup
         public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
         {
             var traceId = TraceIdMiddleware.Resolve(httpContext);
-            logger.LogError(exception, "Unhandled exception for {Method} {Path} (traceId {TraceId})",
-                httpContext.Request.Method, httpContext.Request.Path, traceId);
+            // The middleware suppresses its own UnhandledException log when an IExceptionHandler handles the exception
+            // (ExceptionHandlerOptions.SuppressDiagnosticsCallback default), so this is the single log line per error response.
+            var error = new InternalUnexpected();
+            logger.LogError(exception, "Unhandled exception for {Method} {Path}: {Code} (traceId {TraceId})",
+                httpContext.Request.Method, httpContext.Request.Path, error.Code, traceId);
 
             var problem = AppErrorProblemDetails.ToProblemDetails(
-                new InternalUnexpected(), traceId, httpContext.Request.Path.Value ?? "/");
+                error, traceId, httpContext.Request.Path.Value ?? "/");
             httpContext.Response.StatusCode = problem.Status!.Value;
             return await problemDetails.TryWriteAsync(new ProblemDetailsContext
             {

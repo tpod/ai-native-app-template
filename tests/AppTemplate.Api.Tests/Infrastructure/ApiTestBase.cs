@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+
 namespace AppTemplate.Api.Tests.Infrastructure;
 
 public abstract class ApiTestBase : IAsyncLifetime
@@ -5,9 +7,18 @@ public abstract class ApiTestBase : IAsyncLifetime
     protected ApiFactory Factory { get; private set; } = null!;
     protected HttpClient Client { get; private set; } = null!;
 
+    /// <summary>Override to pass constructor arguments (for example fixture flags) to the factory.</summary>
+    protected virtual ApiFactory CreateFactory() => new();
+
+    /// <summary>Override to register or replace services; runs before the host builds.</summary>
+    protected virtual void ConfigureServices(IServiceCollection services)
+    {
+    }
+
     public ValueTask InitializeAsync()
     {
-        Factory = new ApiFactory();
+        Factory = CreateFactory();
+        Factory.ConfigureTestServices += ConfigureServices;
         Client = Factory.CreateDefaultClient(new OutputDumpHandler(Factory.Activities));
         return ValueTask.CompletedTask;
     }
