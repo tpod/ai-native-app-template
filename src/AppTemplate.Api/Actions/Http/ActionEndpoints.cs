@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AppTemplate.Api.Mcp;
 using AppTemplate.Domain.Common;
 using OneOf;
 
@@ -21,19 +22,44 @@ public static class ActionEndpoints
         {
             if (action.Kind == ActionKind.Mutation)
             {
-                app.MapPost($"/api/actions/{action.Name}/preview", (HttpContext http, ActionPipeline pipeline, CancellationToken ct)
-                    => Handle(http, ct, body => pipeline.PreviewAsync(action, body, ct)));
-                app.MapPost($"/api/actions/{action.Name}", (HttpContext http, ActionPipeline pipeline, CancellationToken ct)
-                    => Handle(http, ct, body => pipeline.ExecuteAsync(action, body, ct)));
+                var previewName = ToolDescriptions.PreviewPrefix + action.Name;
+                Describe(
+                    app.MapPost($"/api/actions/{action.Name}/preview", (HttpContext http, ActionPipeline pipeline, CancellationToken ct)
+                        => Handle(http, ct, body => pipeline.PreviewAsync(action, body, ct))),
+                    action, previewName, typeof(PreviewResponse));
+                Describe(
+                    app.MapPost($"/api/actions/{action.Name}", (HttpContext http, ActionPipeline pipeline, CancellationToken ct)
+                        => Handle(http, ct, body => pipeline.ExecuteAsync(action, body, ct))),
+                    action, action.Name, typeof(ExecuteResponse));
             }
             else
             {
-                app.MapPost($"/api/queries/{action.Name}", (HttpContext http, ActionPipeline pipeline, CancellationToken ct)
-                    => Handle(http, ct, body => pipeline.QueryAsync(action, body, ct)));
+                Describe(
+                    app.MapPost($"/api/queries/{action.Name}", (HttpContext http, ActionPipeline pipeline, CancellationToken ct)
+                        => Handle(http, ct, body => pipeline.QueryAsync(action, body, ct))),
+                    action, action.Name, action.OutputType!);
             }
         }
 
         return app;
+    }
+
+    /// <summary>OpenAPI metadata: operationId, description, request body, 200 type and one problem response per status the action can return.</summary>
+    private static void Describe(RouteHandlerBuilder route, ActionDescriptor action, string operationId, Type success)
+    {
+        route.WithName(operationId)
+            .WithDescription(ToolDescriptions.For(action, operationId))
+            .Accepts(action.InputType, "application/json")
+            .Produces(StatusCodes.Status200OK, success, "application/json");
+
+        IEnumerable<Type> errorTypes = action.HasValidator ? [.. action.ErrorTypes, typeof(ValidationFailed)] : action.ErrorTypes;
+        foreach (var status in errorTypes
+            .Select(t => AppErrorProblemDetails.StatusFor(ErrorMetadata.For(t).Kind))
+            .Distinct()
+            .Order())
+        {
+            route.ProducesProblem(status);
+        }
     }
 
     private static async Task<IResult> Handle<T>(HttpContext http, CancellationToken ct, Func<JsonElement, Task<OneOf<T, AppError>>> run)
