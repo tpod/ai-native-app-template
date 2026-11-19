@@ -1,3 +1,5 @@
+using AppTemplate.Api.Actions;
+using AppTemplate.Api.Actions.Http;
 using AppTemplate.Api.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,7 +9,11 @@ builder.AddServiceDefaults();
 
 builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlite(builder.Configuration.GetConnectionString("appdb")));
 
+builder.Services.AddAppProblemDetails();
+
 var app = builder.Build();
+
+app.UseAppProblemDetails();
 
 if (app.Environment.IsDevelopment())
 {
@@ -16,6 +22,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapDefaultEndpoints();
+
+app.MapFallback("/api/{**path}", (HttpContext ctx) => AppErrorProblemDetails.ToResult(new RequestNotFound(ctx.Request.Path.Value ?? "/"), ctx));
+app.MapFallback("/mcp/{**path}", (HttpContext ctx) => AppErrorProblemDetails.ToResult(new RequestNotFound(ctx.Request.Path.Value ?? "/"), ctx));
 
 app.Run();
 
