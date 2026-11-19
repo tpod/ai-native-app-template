@@ -34,6 +34,7 @@ public static class OpenApiSetup
     /// <summary>Execute = <c>POST /api/actions/{name}</c>: the body is the input plus a required <c>previewToken</c>.</summary>
     private static Task AddPreviewTokenToExecuteRequest(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken ct)
     {
+        DescribeErrorCodes(operation, context);
         var path = context.Description.RelativePath ?? "";
         var isExecute = path.StartsWith("api/actions/", StringComparison.Ordinal)
             && !path.EndsWith("/preview", StringComparison.Ordinal);
@@ -66,6 +67,25 @@ public static class OpenApiSetup
             ],
         };
         return Task.CompletedTask;
+    }
+
+    /// <summary>Sets each problem response's description to the codes it can carry.</summary>
+    private static void DescribeErrorCodes(OpenApiOperation operation, OpenApiOperationTransformerContext context)
+    {
+        var errors = context.Description.ActionDescriptor.EndpointMetadata.OfType<ActionErrorResponses>().FirstOrDefault();
+        if (errors is null || operation.Responses is null)
+        {
+            return;
+        }
+
+        foreach (var (status, codes) in errors.CodesByStatus)
+        {
+            if (operation.Responses.TryGetValue(status.ToString(System.Globalization.CultureInfo.InvariantCulture), out var response)
+                && response is OpenApiResponse concrete)
+            {
+                concrete.Description = $"Possible codes: {string.Join(", ", codes)}.";
+            }
+        }
     }
 
     /// <summary>Adds the four extension members every problem response carries to the shared ProblemDetails schema.</summary>

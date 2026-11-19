@@ -8,7 +8,7 @@ namespace AppTemplate.Api.Tests.OpenApi;
 /// <summary>The committed <c>src/web/openapi.json</c> is the contract the frontend client is generated from.</summary>
 public sealed class OpenApiSnapshotTests : ApiTestBase
 {
-    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true, NewLine = "\n" }; // LF on every OS
 
     // No fixtures: the snapshot describes only the real app's actions.
     protected override ApiFactory CreateFactory() => new(includeFixtures: false);
@@ -62,6 +62,52 @@ public sealed class OpenApiSnapshotTests : ApiTestBase
         }
 
         throw new InvalidOperationException("AppTemplate.slnx not found above " + AppContext.BaseDirectory);
+    }
+}
+
+/// <summary>Uses the Note fixture actions, which exist only in the test host.</summary>
+public sealed class OpenApiFrameworkErrorTests : ApiTestBase
+{
+    [Fact]
+    public async Task OpenApi_Operations_DocumentFrameworkErrorStatusesWithCodes()
+    {
+        var doc = await OpenApiDocument.Fetch(Client);
+        var operations = doc["paths"]!.AsObject()
+            .Where(p => p.Key.StartsWith("/api/actions/fixture_", StringComparison.Ordinal) || p.Key.StartsWith("/api/queries/fixture_", StringComparison.Ordinal))
+            .Select(p => (Route: p.Key, Op: p.Value!["post"]!))
+            .ToList();
+        operations.ShouldNotBeEmpty();
+
+        var executes = 0;
+        foreach (var (route, op) in operations)
+        {
+            var responses = op["responses"]!.AsObject();
+            foreach (var status in new[] { "400", "500" })
+            {
+                responses.ContainsKey(status).ShouldBeTrue($"{route} {status}");
+            }
+
+            var isExecute = route.StartsWith("/api/actions/", StringComparison.Ordinal) && !route.EndsWith("/preview", StringComparison.Ordinal);
+            if (isExecute)
+            {
+                executes++;
+                responses.ContainsKey("409").ShouldBeTrue($"{route} 409");
+                responses["409"]!["description"]!.GetValue<string>().ShouldContain("preview.stale");
+                responses["400"]!["description"]!.GetValue<string>().ShouldContain("preview.token_invalid");
+            }
+
+            responses["400"]!["description"]!.GetValue<string>().ShouldContain("request.malformed");
+            responses["500"]!["description"]!.GetValue<string>().ShouldContain("internal.unexpected");
+
+            var problems = responses.Where(r => !r.Key.StartsWith('2')).ToList();
+            problems.ShouldNotBeEmpty();
+            foreach (var (status, response) in problems)
+            {
+                response!["description"]!.GetValue<string>().StartsWith("Possible codes: ", StringComparison.Ordinal).ShouldBeTrue($"{route} {status}");
+            }
+        }
+
+        executes.ShouldBeGreaterThan(0);
     }
 }
 

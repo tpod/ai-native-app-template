@@ -52,11 +52,9 @@ public static class ActionEndpoints
             .Accepts(action.InputType, "application/json")
             .Produces(StatusCodes.Status200OK, success, "application/json");
 
-        IEnumerable<Type> errorTypes = action.HasValidator ? [.. action.ErrorTypes, typeof(ValidationFailed)] : action.ErrorTypes;
-        foreach (var status in errorTypes
-            .Select(t => AppErrorProblemDetails.StatusFor(ErrorMetadata.For(t).Kind))
-            .Distinct()
-            .Order())
+        var errors = ActionErrorResponses.For(action, isExecute: action.Kind == ActionKind.Mutation && operationId == action.Name);
+        route.WithMetadata(errors);
+        foreach (var status in errors.CodesByStatus.Keys)
         {
             route.ProducesProblem(status);
         }
