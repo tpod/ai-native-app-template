@@ -259,6 +259,28 @@ public sealed class ActionRegistryTests
         public Task<OneOf<Success, SampleLocked>> Apply(SampleAgg target, SampleInput input, ActionContext ctx) => ApplyOk();
     }
 
+    [Action("open_generic_handler", "Open generic.")]
+    public sealed class OpenGenericHandler<T> : SampleMutationBase
+    {
+        public Task<OneOf<SampleAgg, SampleNotFound>> Load(SampleInput input, ActionContext ctx) => LoadOk(input.Name, ctx);
+
+        public Task<OneOf<Success, SampleLocked>> Apply(SampleAgg target, SampleInput input, ActionContext ctx) => ApplyOk();
+    }
+
+    [Query("open_generic_input", "Open generic input.")]
+    public sealed class OpenGenericInput<TInput> : IQuery<TInput, SampleOutput>
+    {
+        public Task<OneOf<SampleOutput, SampleNotFound>> Run(TInput input, ActionContext ctx) => RunOk();
+    }
+
+    [Action("generic_load", "Generic Load.")]
+    public sealed class GenericLoad : SampleMutationBase
+    {
+        public Task<OneOf<SampleAgg, SampleNotFound>> Load<TExtra>(SampleInput input, ActionContext ctx) => LoadOk(input.Name, ctx);
+
+        public Task<OneOf<Success, SampleLocked>> Apply(SampleAgg target, SampleInput input, ActionContext ctx) => ApplyOk();
+    }
+
     // ---- Registry: valid ----
 
     [Fact]
@@ -377,12 +399,26 @@ public sealed class ActionRegistryTests
     [InlineData(typeof(MissingRun), "Run")]
     [InlineData(typeof(UndeclaredError), "[Error")]
     [InlineData(typeof(AbstractHandler), "non-abstract")]
+    [InlineData(typeof(OpenGenericHandler<>), "non-generic")]
+    [InlineData(typeof(OpenGenericInput<>), "non-generic")]
+    [InlineData(typeof(GenericLoad), "Load must not be generic")]
     public void Build_InvalidType_ReportsSingleViolationNamingTypeAndRule(Type type, string rule)
     {
         var ex = Should.Throw<ActionRegistrationException>(() => ActionRegistry.Build([type], _ => false));
         var v = ex.Violations.ShouldHaveSingleItem();
-        v.ShouldContain(type.Name);
+        v.ShouldContain(type.Name.Split('`')[0]);
         v.ShouldContain(rule);
+    }
+
+    [Fact]
+    public void Build_OpenGenericAmongInvalidTypes_KeepsEveryViolation()
+    {
+        var ex = Should.Throw<ActionRegistrationException>(() => ActionRegistry.Build(
+            [typeof(BadName), typeof(OpenGenericHandler<>), typeof(EmptyDescription)], _ => false));
+        ex.Violations.Count.ShouldBe(3);
+        ex.Violations.ShouldContain(v => v.Contains(nameof(BadName)));
+        ex.Violations.ShouldContain(v => v.Contains("OpenGenericHandler<T>") && v.Contains("non-generic"));
+        ex.Violations.ShouldContain(v => v.Contains(nameof(EmptyDescription)));
     }
 
     // ---- Invokers ----

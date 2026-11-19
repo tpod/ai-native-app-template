@@ -88,16 +88,20 @@ public sealed partial class ActionRegistry
 
             if (!type.IsClass || type.IsAbstract || type.ContainsGenericParameters || type.GetConstructors().Length == 0)
             {
+                // The contract and convention checks below assume a constructible, closed handler type.
                 Fail("handler must be a non-abstract, non-generic class with a public constructor.");
+                continue;
             }
 
-            var descriptor = action is not null
-                ? BuildMutation(type, action, hasValidator, Fail)
-                : BuildQuery(type, query!, hasValidator, Fail);
+            var create = action is not null
+                ? ValidateMutation(type, action, hasValidator, Fail)
+                : ValidateQuery(type, query!, hasValidator, Fail);
 
-            if (descriptor is not null && violations.Count == before)
+            // Invokers are compiled only for a type with no violations, so a broken type can never throw here
+            // and hide the violations already collected.
+            if (create is not null && violations.Count == before)
             {
-                descriptors.Add(descriptor);
+                descriptors.Add(create());
             }
         }
 
@@ -118,7 +122,8 @@ public sealed partial class ActionRegistry
         return new ActionRegistry([.. descriptors.OrderBy(d => d.Name, StringComparer.Ordinal)]);
     }
 
-    private static ActionDescriptor? BuildMutation(Type type, ActionAttribute attr, Func<Type, bool> hasValidator, Action<string> fail)
+    /// <summary>Checks the mutation contract; returns a factory that builds the descriptor and compiles its invokers.</summary>
+    private static Func<ActionDescriptor>? ValidateMutation(Type type, ActionAttribute attr, Func<Type, bool> hasValidator, Action<string> fail)
     {
         var contract = SingleClosedInterface(type, typeof(IMutation<,>), "[Action]", "IMutation<TInput, TAggregate>", fail);
         if (contract is null)
@@ -136,7 +141,7 @@ public sealed partial class ActionRegistry
             return null;
         }
 
-        return new ActionDescriptor(
+        return () => new ActionDescriptor(
             attr.Name,
             attr.Description,
             ActionKind.Mutation,
@@ -156,7 +161,8 @@ public sealed partial class ActionRegistry
         };
     }
 
-    private static ActionDescriptor? BuildQuery(Type type, QueryAttribute attr, Func<Type, bool> hasValidator, Action<string> fail)
+    /// <summary>Checks the query contract; returns a factory that builds the descriptor and compiles its invoker.</summary>
+    private static Func<ActionDescriptor>? ValidateQuery(Type type, QueryAttribute attr, Func<Type, bool> hasValidator, Action<string> fail)
     {
         var contract = SingleClosedInterface(type, typeof(IQuery<,>), "[Query]", "IQuery<TInput, TOutput>", fail);
         if (contract is null)
@@ -173,7 +179,7 @@ public sealed partial class ActionRegistry
             return null;
         }
 
-        return new ActionDescriptor(
+        return () => new ActionDescriptor(
             attr.Name,
             attr.Description,
             ActionKind.Query,
@@ -230,6 +236,12 @@ public sealed partial class ActionRegistry
         if (method is null)
         {
             fail($"must declare public method {expected}.");
+            return null;
+        }
+
+        if (method.IsGenericMethodDefinition)
+        {
+            fail($"{name} must not be generic; declare {expected}.");
             return null;
         }
 
@@ -307,7 +319,8 @@ public sealed partial class ActionRegistry
 
         var tick = type.Name.IndexOf('`', StringComparison.Ordinal);
         var name = tick < 0 ? type.Name : type.Name[..tick];
-        return $"{prefix}{name}<{string.Join(", ", type.GenericTypeArguments.Select(Display))}>";
+        // GetGenericArguments, not GenericTypeArguments: an open definition then renders as Handler<T>, not Handler<>.
+        return $"{prefix}{name}<{string.Join(", ", type.GetGenericArguments().Select(Display))}>";
     }
 
     [GeneratedRegex(NameRule)]
