@@ -7,31 +7,34 @@ namespace AppTemplate.Api.Tests.Infrastructure;
 /// <summary>One shared in-memory SQLite database; contexts come and go, the connection keeps the data alive.</summary>
 internal sealed class SqliteTestDatabase : IDisposable
 {
-    private readonly SqliteConnection _connection = new("DataSource=:memory:");
-    private IModelContributor[] _contributors = [];
+    public SqliteTestDatabase() => Connection.Open();
 
-    public SqliteTestDatabase() => _connection.Open();
+    public SqliteConnection Connection { get; } = new("DataSource=:memory:");
 
     public AppDbContext NewContext(params IModelContributor[] contributors)
     {
-        if (contributors.Length > 0)
-        {
-            _contributors = contributors;
-        }
-
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(_connection).Options;
-        return new AppDbContext(options, _contributors);
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(Connection).Options;
+        return new AppDbContext(options, contributors);
     }
 
-    public void Migrate()
+    public void Migrate(params IModelContributor[] contributors)
     {
-        using var context = NewContext();
+        using var context = NewContext(contributors);
+        Migrate(context, contributors);
+    }
+
+    /// <summary>Applies EF migrations through <paramref name="context"/>, then runs each contributor's raw DDL.</summary>
+    public void Migrate(AppDbContext context, IEnumerable<IModelContributor> contributors)
+    {
         context.Database.Migrate();
-        foreach (var contributor in _contributors)
+        foreach (var contributor in contributors)
         {
-            context.Database.ExecuteSqlRaw(contributor.SchemaSql);
+            // Plain ADO: ExecuteSqlRaw would treat '{' and '}' in the DDL as format placeholders.
+            using var command = Connection.CreateCommand();
+            command.CommandText = contributor.SchemaSql;
+            command.ExecuteNonQuery();
         }
     }
 
-    public void Dispose() => _connection.Dispose();
+    public void Dispose() => Connection.Dispose();
 }
