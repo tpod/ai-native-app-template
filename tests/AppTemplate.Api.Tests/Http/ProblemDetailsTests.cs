@@ -23,6 +23,14 @@ public sealed class ProblemDetailsTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Post_UnknownMcpSubRoute_Returns404ProblemNotMcp()
+    {
+        using var content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
+        var r = await ApiResponse.From(await Client.PostAsync("/mcp/nope", content, TestContext.Current.CancellationToken));
+        r.ShouldFailWith("request.not_found", HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Get_Health_HasTraceIdHeader()
     {
         var r = await ApiResponse.From(await Client.GetAsync("/health", TestContext.Current.CancellationToken));
