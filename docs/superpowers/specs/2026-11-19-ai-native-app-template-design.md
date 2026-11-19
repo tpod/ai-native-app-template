@@ -47,7 +47,7 @@ Humans review agent changes in the agent's chat by reading the preview. The MCP 
 ## 5. Constraints
 
 - **Environment:** .NET 10 SDK (10.0.115), Node 22, Ubuntu 26.04 VM, no Docker, no passwordless sudo.
-- **Aspire 13.x** (SDK-based AppHost, no workload). The SQLite resource comes from `CommunityToolkit.Aspire.Hosting.SQLite` (13.x line). The client uses the CommunityToolkit SQLite EF Core client integration, or plain `UseSqlite` with the Aspire-provided connection string. The builder must verify package versions and compatibility on NuGet before pinning.
+- **Aspire 17.x**, the current stable release (17.0.0, released 2026-11-17). The AppHost is SDK-based, and the Aspire CLI is installed via `curl -sSL https://aspire.dev/install.sh | bash`. The SQLite resource comes from `CommunityToolkit.Aspire.Hosting.SQLite`, on whichever line matches Aspire 17. The client uses the CommunityToolkit SQLite EF Core client integration, or plain `UseSqlite` with the Aspire-provided connection string. The builder must verify package versions and compatibility on NuGet before pinning.
 - **Library:** OneOf (NuGet `OneOf`) for all result types.
 - **MCP:** the official C# SDK, `ModelContextProtocol.AspNetCore`, using the Streamable HTTP transport.
 - **Database:** SQLite for the running app and for tests.
@@ -284,7 +284,7 @@ public interface IAppError
 - **Action metrics:** a call counter and a duration histogram, tagged by name, phase and outcome.
 - **Logs:** structured logging with stable message templates. Every error envelope is logged once at the boundary with its code and `traceId`.
 - **`traceId` everywhere:** it appears in every error response, and every response carries a `traceparent`/`traceId` response header.
-- **Aspire MCP for coding agents:** the Aspire CLI's MCP server is registered in `.mcp.json`, so coding agents can query resources, logs and traces. The builder must verify the current command (`aspire mcp init` or equivalent) for the Aspire version in use.
+- **Aspire MCP for coding agents:** the Aspire CLI's MCP server (`aspire agent mcp`, stdio) is registered in `.mcp.json`, so coding agents can query resources, logs and traces. The `aspire-monitoring` skill from the Aspire plugin (§7.11) covers how to use it.
 - **Test diagnostics:**
   - Integration tests route `ILogger` output to xUnit's test output.
   - An in-memory OTel exporter captures spans per test, and on assertion failure the test prints the spans for the failing request.
@@ -300,7 +300,7 @@ public interface IAppError
 - **Shared components:**
   - `<DataTable>` is a wrapper on TanStack Table, used for every list.
   - `<PreviewConfirmDialog>` takes an action name and an input. It calls preview, renders the summary, the changes table, side effects and warnings, and calls execute with the token when confirmed. It also renders error envelopes, including `preview.stale` with a "re-preview" button. No mutation in the UI bypasses it.
-- **Dev:** the AppHost runs the Vite dev server as a resource (Aspire's Vite/JavaScript hosting integration; the builder must verify the package for Aspire 13). Vite proxies `/api` and `/mcp` to the Api.
+- **Dev:** the AppHost runs the Vite dev server as a resource (Aspire's Vite/JavaScript hosting integration; the builder must verify the package for Aspire 17). Vite proxies `/api` and `/mcp` to the Api.
 - **Serving:**
   - The Api's publish/build step runs `vite build` into `wwwroot`. The Api serves the static files and falls back to `index.html` for client routes.
   - The same `vite build` output is a standalone static bundle. The API base URL comes from `VITE_API_BASE_URL`, defaulting to same-origin.
@@ -352,17 +352,60 @@ public interface IAppError
   - the Postgres swap path.
 
   It stays short and links to the skills for procedures.
+- **Docs-lookup rule in `AGENTS.md`.** Before using any framework or third-party API, look it up. Never write it from memory.
+  - .NET, ASP.NET Core, EF Core and Aspire: the Microsoft Learn MCP.
+  - OneOf, the MCP C# SDK, shadcn/ui, Tailwind and TanStack: Context7.
+  - Then confirm against the installed package (its source, XML docs or `-h`) before building on it.
 - **`CLAUDE.md`** contains `@AGENTS.md` and nothing else.
-- **Skills** (`.claude/skills/`):
-  - `add-action`: the end-to-end recipe, in order: VO(s) → aggregate behavior + domain errors → action/query class → EF mapping + migration → integration test class → optional UI with `DataTable`/`PreviewConfirmDialog` → `verify.sh`.
-  - `add-aggregate`: a new aggregate root with id VO, EF configuration, migration and first action.
-  - `investigate`: the debugging order, how to use the Aspire MCP and the test diagnostics.
-  - `remove-example`: deletes the Projects example cleanly (code, migrations, UI, tests) and leaves the framework green.
-  - `shadcn`: the official skill, installed with `npx -y skills add shadcn/ui --skill shadcn --agent claude-code`. Verify against ui.shadcn.com/docs/skills first.
+
+#### 7.11.1 Skills: two sources
+
+**Official skills come in as plugin references, not as copies.** They are chosen over copying because they stay current, and the Aspire docs warn that local copies override and go stale. The cost is that each developer accepts the plugin install, and the plugins work in Claude Code only. Other agents still get `AGENTS.md` and the repo-owned skills. The plugins are declared in the committed `.claude/settings.json` (`extraKnownMarketplaces` + `enabledPlugins`), so trusting the folder prompts the install.
+
+| Plugin | Marketplace repo | What it gives agents |
+|---|---|---|
+| `aspire` | `microsoft/aspire-skills` | `aspire`, `aspire-orchestration`, `aspire-monitoring`, `aspire-deployment`, `aspireify`, … |
+| `dotnet` | `dotnet/skills` | `csharp-expert`, `csharp-refactoring`, `msbuild`, `dotnet-breaking-changes`, plus a **C# LSP server** |
+| `dotnet-data` | `dotnet/skills` | `optimizing-ef-core-queries` |
+| `dotnet-test` | `dotnet/skills` | `run-tests`, `test-anti-patterns`, `assertion-quality`, `test-gap-analysis`, … (framework-agnostic ones; its MSTest-specific skills don't apply because the template uses xUnit) |
+| `microsoft-docs` | `microsoftdocs/mcp` | Microsoft Learn MCP server + concept/API-reference skills |
+
+- The builder must verify marketplace names, plugin ids and the settings keys against the current docs. Sources disagree on the `microsoft-docs` marketplace name.
+- **Do not run `aspire agent init`** as part of template setup. It writes telemetry hooks into the user-level `~/.claude/settings.json` even with `--scope project`. The template commits the equivalent project settings and `.mcp.json` entries itself.
+- **Exception: shadcn is copied in.** The official shadcn skill is installed into `.claude/skills/shadcn` with `npx -y skills add shadcn/ui --skill shadcn --agent claude-code`, because it is distributed through the skills CLI. Verify against ui.shadcn.com/docs/skills first. `AGENTS.md` notes how to refresh it.
+- No community DDD or EF Core skills are installed. The ones surveyed (for example `baotoq/dotnet-ddd`, which uses a Result pattern) teach patterns that conflict with OneOf, `IAppError` or the action registry.
+
+**Repo-owned skills** go in `.claude/skills/`. They encode this template's specific conventions and refer to the official skills instead of repeating them.
+
+| Skill | Purpose |
+|---|---|
+| `domain-modeling` | Aggregates, child entities and strongly typed ids. VOs: private constructor, `Create` returning `OneOf`, `sealed record`. Behavior returns precise `OneOf`; domain events; `IAppError` design, including how to write a good `suggestion`. DB-dependent checks are passed into the domain. Anti-patterns: anemic entities, public setters, logic in actions. |
+| `ef-core` | Mapping rich entities: backing fields, private setters, value converters for single-value VOs, complex types for multi-value VOs, the `Version` concurrency token. Creating and naming migrations, and changes that preserve data (rename vs drop and add). SQLite limits and the Postgres-portable rule. Links to `optimizing-ef-core-queries` for query work. |
+| `tdd` | Integration tests first: write the `{Action}Tests` class with `[Covers]` for the happy path, each error code and the stale case, using the `Preview`/`Execute`/`ShouldFailWith` helpers. Watch it fail, implement domain then action, go green, then run `verify.sh`. Links to `test-anti-patterns` and `assertion-quality`. |
+| `add-action` | The end-to-end recipe, in order: VO(s) → aggregate behavior + domain errors → action/query class → EF mapping + migration → integration test class → optional UI → `verify.sh`. It refers to `tdd`, `domain-modeling`, `ef-core` and `frontend-feature` for each step. |
+| `add-aggregate` | A new aggregate root with id VO, EF configuration, migration and first action. |
+| `change-action-contract` | Changing an existing action's input, output or error codes. These are MCP tool contracts that runtime agents depend on, so the skill covers when a change is additive and when it breaks something, how to add instead of rename, and which tests and descriptions to update. |
+| `frontend-feature` | A UI page for an action or query: the generated client, TanStack Query, `<DataTable>`, `<PreviewConfirmDialog>`, and shadcn components added via the CLI. Links to `shadcn`. |
+| `investigate` | The debugging order: error code → `traceId` → trace and logs via the Aspire MCP (`aspire-monitoring`) → the failing test's captured spans and logs. |
+| `remove-example` | Deletes the Projects example cleanly (code, migrations, UI, tests) and leaves the framework green. |
+| `rename-template` | Runs `scripts/rename.sh` and checks the result. |
+| `swap-to-postgres` | AppHost resource, provider registration, migration regeneration, and test implications. |
+
+- **Skill lint.** A test in `AppTemplate.Architecture.Tests` parses every repo-owned `SKILL.md` and fails if:
+  - the frontmatter (`name`, `description`) is missing;
+  - any repo path, script or `dotnet`/`npm run` target the skill names in backticks no longer exists;
+  - a skill links to another repo-owned skill that doesn't exist.
+
+  The test asserts it found at least the skills listed above. This keeps skills from going stale as the code moves.
+
+#### 7.11.2 MCP servers for coding agents
+
 - **`.mcp.json`** registers:
-  - the shadcn MCP (`npx shadcn@latest mcp`);
-  - the Aspire MCP;
-  - the app's own MCP endpoint (`http://localhost:<port>/mcp`), so coding agents can test features as a runtime agent would.
+  - Aspire: `aspire agent mcp` (stdio);
+  - shadcn: `npx shadcn@latest mcp`;
+  - Context7: the remote `https://mcp.context7.com/mcp`. An API key is optional and raises rate limits; `AGENTS.md` documents setting it through an env var, never committed;
+  - the app's own MCP endpoint (`http://localhost:<fixed port>/mcp`), so coding agents can test features as a runtime agent would.
+- The Microsoft Learn MCP comes through the `microsoft-docs` plugin. If the plugin doesn't bundle it, the builder adds `https://learn.microsoft.com/api/mcp` to `.mcp.json` directly. It must not be registered twice.
 - **Frontend rules in `AGENTS.md`:**
   - add components via `npx shadcn@latest add`;
   - never edit `components/ui/*`, compose on top instead;
@@ -392,7 +435,8 @@ My call: a **Git template repository**, cloned and then renamed with a script `s
 ## 8. Left to the builder
 
 - Exact interface and method signatures for `IMutation`/`IQuery`/`ActionContext`, and how the registry reflects over them, while keeping the §7.3 guarantees.
-- Package versions. Verify the Aspire 13 compatibility of the CommunityToolkit SQLite and Vite hosting packages, the current Aspire MCP command, and the shadcn skill command.
+- Package versions. Verify the Aspire 17 compatibility of the CommunityToolkit SQLite and Vite hosting packages, the plugin marketplace names and ids, the `.claude/settings.json` plugin keys, and the shadcn skill command.
+- The wording of each repo-owned skill, within the purposes listed in §7.11.1.
 - The architecture-test library and the test framework details (xUnit v2 vs v3).
 - Change-set normalization and hashing details, and the JSON shape of `details` per error.
 - UI layout and styling within the shadcn defaults.
