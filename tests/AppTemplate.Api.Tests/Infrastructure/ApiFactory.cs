@@ -56,9 +56,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncDisposabl
     {
         var host = base.CreateHost(builder);
         using var scope = host.Services.CreateScope();
-        _database.Migrate(
-            scope.ServiceProvider.GetRequiredService<AppDbContext>(),
-            scope.ServiceProvider.GetServices<IModelContributor>());
+        _database.Migrate(scope.ServiceProvider.GetServices<IModelContributor>());
         return host;
     }
 

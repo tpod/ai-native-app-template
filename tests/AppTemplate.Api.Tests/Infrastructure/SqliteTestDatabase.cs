@@ -17,18 +17,18 @@ internal sealed class SqliteTestDatabase : IDisposable
         return new AppDbContext(options, contributors);
     }
 
-    public void Migrate(params IModelContributor[] contributors)
-    {
-        // Migrate with the base model: contributor entities are not in the migration snapshot and would trip
-        // the pending-model-changes check. Their tables come from SchemaSql instead.
-        using var context = NewContext();
-        Migrate(context, contributors);
-    }
+    /// <summary>Applies EF migrations with the base model, then runs each contributor's raw DDL.</summary>
+    public void Migrate(params IModelContributor[] contributors) => Migrate((IEnumerable<IModelContributor>)contributors);
 
-    /// <summary>Applies EF migrations through <paramref name="context"/>, then runs each contributor's raw DDL.</summary>
-    public void Migrate(AppDbContext context, IEnumerable<IModelContributor> contributors)
+    public void Migrate(IEnumerable<IModelContributor> contributors)
     {
-        context.Database.Migrate();
+        // Base model only: contributor entities are not in the migration snapshot and would trip the
+        // pending-model-changes check. Their tables come from SchemaSql instead.
+        using (var context = NewContext())
+        {
+            context.Database.Migrate();
+        }
+
         foreach (var contributor in contributors)
         {
             // Plain ADO: ExecuteSqlRaw would treat '{' and '}' in the DDL as format placeholders.
