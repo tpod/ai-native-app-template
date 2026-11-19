@@ -18,7 +18,7 @@ Humans review agent changes in the agent's chat by reading the preview. The MCP 
 
 - **One definition per action.** An action class produces the HTTP endpoints, the MCP tools, the preview, OpenAPI entries and telemetry. A feature cannot ship without its MCP exposure.
 - **A bound preview for every mutation.** Execute requires a token from preview and fails if anything changed in between.
-- **Structured errors.** Every error is `{ code, message, details, suggestion, traceId }`, and the shape is the same on HTTP and MCP.
+- **Structured errors.** Every error is a ProblemDetails (RFC 9457) object. Its `title`/`detail` carry the message, and the extensions `code`, `details`, `suggestion` and `traceId` are always present. The shape is the same on HTTP and MCP.
 - **Rich DDD domain.** Aggregates carry the behavior and value objects carry the validation. There are no anemic entities and no services that hold domain logic. Control flow uses OneOf, not exceptions.
 - **Integration tests are mandatory** for every action. They use `WebApplicationFactory` and SQLite.
 - **Observability good enough that an agent can diagnose issues by itself** from error responses, traces, logs and test output.
@@ -48,7 +48,12 @@ Humans review agent changes in the agent's chat by reading the preview. The MCP 
 
 - **Environment:** .NET 10 SDK (10.0.115), Node 22, Ubuntu 26.04 VM, no Docker, no passwordless sudo.
 - **Aspire 17.x**, the current stable release (17.0.0, released 2026-11-17). The AppHost is SDK-based, and the Aspire CLI is installed via `curl -sSL https://aspire.dev/install.sh | bash`. The SQLite resource comes from `CommunityToolkit.Aspire.Hosting.SQLite`, on whichever line matches Aspire 17. The client uses the CommunityToolkit SQLite EF Core client integration, or plain `UseSqlite` with the Aspire-provided connection string. The builder must verify package versions and compatibility on NuGet before pinning.
-- **Library:** OneOf (NuGet `OneOf`) for all result types.
+- **Libraries:**
+  - OneOf (NuGet `OneOf`) for all result types.
+  - FluentValidation for input validation. It never throws (§7.5).
+  - Shouldly for test assertions.
+- **Build:** `TreatWarningsAsErrors=true` and central package management (`Directory.Packages.props`) across the repo.
+- **Coding-agent base:** `codewithmukesh/dotnet-claude-kit` (MIT, v0.14.0+), with documented overrides where it conflicts with this design (§7.11).
 - **MCP:** the official C# SDK, `ModelContextProtocol.AspNetCore`, using the Streamable HTTP transport.
 - **Database:** SQLite for the running app and for tests.
 
@@ -72,6 +77,10 @@ How the preview is computed:
 
 Preview binding: **bound** (execute requires the token), chosen over advisory, because only a bound preview guarantees that what commits is exactly what was previewed.
 
+Validation: **the value object owns each rule, and FluentValidation collects the failures** (chosen). A `MustBeValid(Vo.Create)` bridge runs the value object's factory inside the validator. It was chosen over "FluentValidation owns all rules", which would let invalid value objects be built anywhere outside the validator.
+
+Error format: **ProblemDetails (RFC 9457) with extensions** (chosen) over a custom envelope. It's the HTTP standard and matches the dotnet-claude-kit skills.
+
 Human gate over MCP: **rely on the client** (chosen), over server-enforced MCP elicitation. The token guarantees integrity. Whether a human sees the preview depends on the MCP client's per-tool permission prompts and on the agent following the server instructions. Elicitation was deferred because client support varies, and it would block unattended runs.
 
 ## 7. Design
@@ -91,7 +100,7 @@ src/
   AppTemplate.ServiceDefaults/  # OTel, health checks, resilience
   AppTemplate.Domain/           # aggregates, entities, VOs, errors, events. No EF/ASP.NET refs.
   AppTemplate.Api/
-    Actions/                    # registry, preview engine, token, error envelope (framework code)
+    Actions/                    # registry, preview engine, token, validation bridge, ProblemDetails mapping (framework code)
     Features/<Aggregate>/       # one file per action/query, e.g. Projects/RenameProject.cs
     Data/                       # AppDbContext, EF configurations, migrations
     Mcp/                        # MCP server wiring (tools are generated from the registry)
@@ -160,7 +169,15 @@ Registry responsibilities, run at startup:
    - JSON schema generated from the input record.
    - The tool description includes the action description, the list of possible error codes (read from the OneOf type arguments), and, for execute tools, "requires `previewToken` from `preview_{name}`".
    - Tool annotations: `readOnlyHint` on queries and previews, and `destructiveHint` when the action attribute says so.
-5. **Register OpenAPI operations** with the input/output schemas and the error envelope, so the TypeScript client can be generated.
+5. **Register OpenAPI operations** with the input/output schemas and the ProblemDetails error schema, so the TypeScript client can be generated.
+
+**Request pipeline for every call** (query, preview and execute):
+
+1. Deserialize the request. Failure → `request.malformed`.
+2. If an `IValidator<TInput>` is registered in DI, run `ValidateAsync`. Never call `ValidateAndThrow`. Failures → `validation.failed` (§7.5).
+3. Then the mutation or query flow (§7.4).
+
+`validation.failed` is implicitly a possible error of every action that has a validator. The registry adds it to the tool description, and it's covered by the `[Covers]` check.
 
 The precise way the registry reads the error types (for example, from the `Apply` method's return type via reflection, with `IMutation<,>` as a marker plus convention-named methods) is the builder's call. The requirement is that **the declared OneOf error types are the single source of truth** for documentation, MCP descriptions and startup validation.
 
@@ -171,7 +188,7 @@ The precise way the registry reads the error types (for example, from the `Apply
 1. Open a fresh `DbContext` scope.
 2. Call `Load`. For creates, the new aggregate id is allocated here.
 3. Call `Apply`.
-4. On an error, return the error envelope.
+4. On an error, return the ProblemDetails error.
 5. On success, read the `ChangeTracker`:
    - per-field `before`/`after` for modified, added and deleted entities, excluding system-managed fields (`Version`, timestamps);
    - the raised domain events, as type name and payload.
@@ -230,7 +247,28 @@ public interface IAppError
 }
 ```
 
-- The envelope is the same on HTTP and MCP: `{ "error": { code, message, details, suggestion, traceId } }`.
+- **Wire format: ProblemDetails (RFC 9457) with extensions.** The same JSON is used on HTTP (`application/problem+json`) and MCP:
+  ```json
+  { "type": "https://errors.apptemplate.dev/project.name_taken",
+    "title": "Project name already taken",
+    "status": 409,
+    "detail": "A non-archived project named 'Beta' already exists.",
+    "instance": "/api/actions/rename_project",
+    "code": "project.name_taken",
+    "details": { "field": "name", "value": "Beta", "existingProjectId": "…" },
+    "suggestion": "Choose a different name; list_projects shows existing names.",
+    "traceId": "…" }
+  ```
+- **Mapping from `IAppError` to ProblemDetails:**
+
+  | ProblemDetails field | Comes from |
+  |---|---|
+  | `title` | a stable per-code title, a static string on the error type |
+  | `detail` | `Message`, specific to this instance |
+  | `status` | `Kind`, via the table below |
+  | `type` | built from `Code`. The base URI is configurable and doesn't need to resolve in v1 |
+
+  The extensions `code`, `details`, `suggestion` and `traceId` are always present. Produce it with ASP.NET Core's `IProblemDetailsService` / `TypedResults.Problem`, so that framework-generated errors (404 on unknown routes, 415, and so on) share the shape. A customizer adds `code` and `suggestion` where they're missing, e.g. `request.not_found`.
 - **HTTP status mapping:**
 
   | Error | HTTP status |
@@ -241,11 +279,17 @@ public interface IAppError
   | `Precondition` (preview token errors) | 409 |
   | `preview.token_invalid` | 400 |
 
-- **On MCP**, errors are a tool result with `isError: true`, where structured content and text both carry the envelope.
-- **Validation:**
-  - The input is converted into VOs in one pass.
-  - All failures are aggregated into a single `validation.failed` error, whose `details.fields[]` holds `{ field, code, message }`.
-  - Each VO validation error has its own field-level code, e.g. `project_name.too_long`.
+- **On MCP**, errors are a tool result with `isError: true`, where structured content and text both carry the ProblemDetails JSON.
+- **Validation: FluentValidation, never throwing.**
+  - Each action may have an `AbstractValidator<TInput>`. The registry runs `ValidateAsync` and maps a failed `ValidationResult` to `ValidationFailed : IAppError`:
+    - code `validation.failed`, status 422;
+    - `details.fields[]` = `{ field, code, message, suggestion }`.
+  - **Value objects own their rules.** The bridge `RuleFor(x => x.Name).MustBeValid(ProjectName.Create)` runs the value object's `Create` and turns its OneOf error into a field failure. The field `code` is the value object error's code (e.g. `project_name.too_long`), and the suggestion is its suggestion.
+  - FluentValidation itself holds only rules that belong to the input: required fields, rules across fields, and formats with no value object.
+  - Suggestions on plain FluentValidation rules come from `.WithSuggestion("…")`, a template extension that stores the text in `CustomState`. Field codes come from `.WithErrorCode("…")`. A rule without an explicit code gets a derived default, e.g. `project_id.not_empty`.
+  - All failures are returned together, not only the first.
+  - **Value objects are still created in `Apply`** through `Create`. After validation it can't fail, but domain code never trusts unvalidated primitives.
+  - **Banned:** `ValidateAndThrow`, the dotnet-claude-kit `ValidationBehavior`, `ValidationFilter<T>`, and any `ValidationException` flow. An architecture test bans references to `ValidationException` in the Api assembly.
 - **Unhandled exceptions** become `internal.unexpected`. The suggestion says the error is not caused by the input and points to the `traceId`. The full exception goes to logs and traces only, never to the response.
 - Malformed JSON and model-binding failures become `request.malformed`.
 - An architecture test asserts that error codes are unique across all `IAppError` types and match `^[a-z_]+\.[a-z_]+$`.
@@ -254,7 +298,7 @@ public interface IAppError
 
 - `ModelContextProtocol.AspNetCore`, Streamable HTTP at `/mcp`. Tools are created from the registry (§7.3), not with hand-written `[McpServerTool]` classes.
 - No auth in v1.
-- Server instructions (the MCP `instructions` field) explain the preview → execute protocol and the error envelope. Agents learn the rules from the server itself.
+- Server instructions (the MCP `instructions` field) explain the preview → execute protocol and the ProblemDetails error format. Agents learn the rules from the server itself.
 - **Human gate (v1, relies on the client):**
   - Execute tools are annotated `readOnlyHint: false`, with `destructiveHint` where the action is flagged, so MCP clients prompt before calling them.
   - Both the server instructions and every execute tool description say: "Show the user the preview `summary` and `changes` and get their confirmation before calling this tool."
@@ -282,7 +326,7 @@ public interface IAppError
   - `aggregate.type` and `aggregate.id`;
   - `preview.stale_reason` when relevant.
 - **Action metrics:** a call counter and a duration histogram, tagged by name, phase and outcome.
-- **Logs:** structured logging with stable message templates. Every error envelope is logged once at the boundary with its code and `traceId`.
+- **Logs:** structured logging with stable message templates. Every error response is logged once at the boundary with its code and `traceId`.
 - **`traceId` everywhere:** it appears in every error response, and every response carries a `traceparent`/`traceId` response header.
 - **Aspire MCP for coding agents:** the Aspire CLI's MCP server (`aspire agent mcp`, stdio) is registered in `.mcp.json`, so coding agents can query resources, logs and traces. The `aspire-monitoring` skill from the Aspire plugin (§7.11) covers how to use it.
 - **Test diagnostics:**
@@ -299,7 +343,7 @@ public interface IAppError
   - Client regeneration is part of `scripts/verify.sh`. A drifted client fails the check.
 - **Shared components:**
   - `<DataTable>` is a wrapper on TanStack Table, used for every list.
-  - `<PreviewConfirmDialog>` takes an action name and an input. It calls preview, renders the summary, the changes table, side effects and warnings, and calls execute with the token when confirmed. It also renders error envelopes, including `preview.stale` with a "re-preview" button. No mutation in the UI bypasses it.
+  - `<PreviewConfirmDialog>` takes an action name and an input. It calls preview, renders the summary, the changes table, side effects and warnings, and calls execute with the token when confirmed. It also renders ProblemDetails errors, including `preview.stale` with a "re-preview" button. No mutation in the UI bypasses it.
 - **Dev:** the AppHost runs the Vite dev server as a resource (Aspire's Vite/JavaScript hosting integration; the builder must verify the package for Aspire 17). Vite proxies `/api` and `/mcp` to the Api.
 - **Serving:**
   - The Api's publish/build step runs `vite build` into `wwwroot`. The Api serves the static files and falls back to `index.html` for client routes.
@@ -308,10 +352,14 @@ public interface IAppError
 
 ### 7.10 Testing
 
-- **`AppTemplate.Api.Tests` (xUnit, `WebApplicationFactory<Program>`):**
+- **Test stack:** xUnit v3, `WebApplicationFactory<Program>`, and **Shouldly** for all assertions. Plain xUnit `Assert.*` and FluentAssertions are not used; this overrides dotnet-claude-kit, which uses xUnit `Assert`.
+- **`AppTemplate.Api.Tests`:**
   - Each test gets its own in-memory SQLite database. The connection is held open for the test's lifetime, and migrations are applied with `Database.Migrate()`.
+  - EF's `InMemory` provider is banned.
   - `FakeTimeProvider` and a fixed signing key are used.
-  - Helpers: `Preview(name, input)`, `Execute(name, input, token)`, `PreviewAndExecute(...)`, `Query(...)`, and assertions on the error envelope (`ShouldFailWith("project.name_taken")`).
+  - Helpers: `Preview(name, input)`, `Execute(name, input, token)`, `PreviewAndExecute(...)`, `Query(...)`.
+  - Shouldly-style extensions on the ProblemDetails response: `response.ShouldFailWith("project.name_taken")`, and `ShouldHaveFieldError("name", "project_name.too_long")` for `validation.failed`.
+  - Test naming follows dotnet-claude-kit: `Method_State_Expected`, with `[Covers]` alongside.
 - **Mandatory per action:** a test class named `{ActionClass}Tests` covering:
   - the happy path through preview + execute;
   - each declared error code;
@@ -335,6 +383,7 @@ public interface IAppError
   - Every `[Action]`/`[Query]` has a matching `{Name}Tests` class in the test assembly.
   - Every OneOf error type argument implements `IAppError`.
   - Error codes are unique and well-formed.
+  - No references to `ValidationException`, Mediator or MediatR, `Result<T>`-style types, or `Microsoft.EntityFrameworkCore.InMemory`.
   - The app boots, so the registry's startup validation passes.
 - The collection-size rule applies: every test that loops over the registry or over error types first asserts the collection is non-empty.
 
@@ -349,7 +398,9 @@ public interface IAppError
   - commands (`scripts/verify.sh`, run, migrations);
   - how to observe and debug;
   - frontend rules;
-  - the Postgres swap path.
+  - the Postgres swap path;
+  - the dotnet-claude-kit overrides (§7.11.1);
+  - per-machine prerequisites (Aspire CLI, `CWM.RoslynNavigator`).
 
   It stays short and links to the skills for procedures.
 - **Docs-lookup rule in `AGENTS.md`.** Before using any framework or third-party API, look it up. Never write it from memory.
@@ -358,31 +409,63 @@ public interface IAppError
   - Then confirm against the installed package (its source, XML docs or `-h`) before building on it.
 - **`CLAUDE.md`** contains `@AGENTS.md` and nothing else.
 
-#### 7.11.1 Skills: two sources
+#### 7.11.1 Skills: base kit, plugins, repo-owned deltas
 
-**Official skills come in as plugin references, not as copies.** They are chosen over copying because they stay current, and the Aspire docs warn that local copies override and go stale. The cost is that each developer accepts the plugin install, and the plugins work in Claude Code only. Other agents still get `AGENTS.md` and the repo-owned skills. The plugins are declared in the committed `.claude/settings.json` (`extraKnownMarketplaces` + `enabledPlugins`), so trusting the folder prompts the install.
+**Base: `codewithmukesh/dotnet-claude-kit`** (MIT, v0.14.0 or later), chosen by the user. It provides:
+- 52 skills (`ddd`, `ef-core`, `testing`, `tdd`, `minimal-api`, `opentelemetry`, `modern-csharp`, …);
+- 11 agents (`ef-core-specialist`, `test-engineer`, `code-reviewer`, …);
+- 17 commands (`/verify`, `/tdd`, `/code-review`, `/build-fix`, `/migrate`, …);
+- hooks: `dotnet format` on edit, `dotnet restore` after `.csproj` changes, and a bash guard that blocks force-push, `reset --hard`, `rm -rf` and `pkill`;
+- the `cwm-roslyn-navigator` MCP server (26 Roslyn tools).
 
-| Plugin | Marketplace repo | What it gives agents |
+**Plugin references, not copies.** They stay current, and copies go stale and override the originals. The plugins are declared in the committed `.claude/settings.json` (`extraKnownMarketplaces` + `enabledPlugins`), so trusting the folder prompts the install. The cost is that each developer accepts the install, and the plugins work in Claude Code only; other agents still get `AGENTS.md`, `.claude/rules/` and the repo-owned skills.
+
+| Plugin | Marketplace repo | Why it's included |
 |---|---|---|
-| `aspire` | `microsoft/aspire-skills` | `aspire`, `aspire-orchestration`, `aspire-monitoring`, `aspire-deployment`, `aspireify`, … |
-| `dotnet` | `dotnet/skills` | `csharp-expert`, `csharp-refactoring`, `msbuild`, `dotnet-breaking-changes`, plus a **C# LSP server** |
+| `dotnet-claude-kit` | `codewithmukesh/dotnet-claude-kit` | The base: general .NET, EF Core, DDD, testing, workflow commands, hooks, Roslyn MCP |
+| `aspire` | `microsoft/aspire-skills` | Official, and current for Aspire 17. The kit's `aspire` skill predates it; **where they differ, the official plugin wins** |
+| `dotnet` | `dotnet/skills` | The **C# LSP server**, `csharp-refactoring`, `dotnet-breaking-changes` |
 | `dotnet-data` | `dotnet/skills` | `optimizing-ef-core-queries` |
-| `dotnet-test` | `dotnet/skills` | `run-tests`, `test-anti-patterns`, `assertion-quality`, `test-gap-analysis`, … (framework-agnostic ones; its MSTest-specific skills don't apply because the template uses xUnit) |
 | `microsoft-docs` | `microsoftdocs/mcp` | Microsoft Learn MCP server + concept/API-reference skills |
 
+- `dotnet-test` is not included. The kit's `testing` and `tdd` skills cover xUnit, and `dotnet-test` leans toward MSTest.
+- **Prerequisite per machine:** `dotnet tool install -g CWM.RoslynNavigator`, required by the kit's Roslyn MCP. `AGENTS.md` and `rename-template` list it. The Aspire CLI is listed too.
 - The builder must verify marketplace names, plugin ids and the settings keys against the current docs. Sources disagree on the `microsoft-docs` marketplace name.
-- **Do not run `aspire agent init`** as part of template setup. It writes telemetry hooks into the user-level `~/.claude/settings.json` even with `--scope project`. The template commits the equivalent project settings and `.mcp.json` entries itself.
+- **Do not run `aspire agent init`.** It writes telemetry hooks into the user-level `~/.claude/settings.json` even with `--scope project`.
+- **Do not run `/dotnet-init`.** It overwrites `CLAUDE.md`, which must stay `@AGENTS.md`.
 - **Exception: shadcn is copied in.** The official shadcn skill is installed into `.claude/skills/shadcn` with `npx -y skills add shadcn/ui --skill shadcn --agent claude-code`, because it is distributed through the skills CLI. Verify against ui.shadcn.com/docs/skills first. `AGENTS.md` notes how to refresh it.
-- No community DDD or EF Core skills are installed. The ones surveyed (for example `baotoq/dotnet-ddd`, which uses a Result pattern) teach patterns that conflict with OneOf, `IAppError` or the action registry.
 
-**Repo-owned skills** go in `.claude/skills/`. They encode this template's specific conventions and refer to the official skills instead of repeating them.
+**Kit overrides.** Plugin skills can't be edited, so conflicts are settled in three places:
+
+1. **`AGENTS.md` → "dotnet-claude-kit overrides" section**, which opens with: "dotnet-claude-kit is the base. Where it conflicts with this file, this file wins."
+
+   | Kit says | This template does |
+   |---|---|
+   | Hand-rolled `Result` / `Result<T>` | **OneOf** everywhere. Never introduce a `Result` type |
+   | FluentValidation via `ValidationFilter<T>` / Mediator `ValidationBehavior`, which throw `ValidationException` | FluentValidation run by the action registry with `ValidateAsync`, **never throwing**. Value objects own the rules through `MustBeValid` (§7.5) |
+   | Mediator / MediatR `IRequest` + handlers; `IEndpointGroup` endpoints; `/scaffold` for features | **The action registry.** One `[Action]`/`[Query]` class generates the HTTP + MCP + preview. Never hand-write endpoints or MCP tools for actions. Use the `add-action` skill, not `/scaffold` |
+   | Domain events implement Mediator `INotification` | Our own `IDomainEvent`. Domain depends only on OneOf |
+   | Integration tests on Testcontainers Postgres | In-memory **SQLite** with real migrations. EF `InMemory` stays banned, as in the kit |
+   | Clean Architecture in 4 projects (Domain/Application/Infrastructure/Api) | **Domain + Api** (§7.1). `/arch-check` must be judged against §7.1 |
+   | Value objects validate in the constructor | Private constructor + `Create` returning OneOf |
+   | Assertions with xUnit `Assert` | **Shouldly** |
+   | ProblemDetails for errors | Same, plus the required extensions `code`, `details`, `suggestion` and `traceId` (§7.5) |
+   | Aspire examples with `AddPostgres` / `AddNpgsqlDbContext` | `AddSqlite` for v1; Postgres only via `swap-to-postgres` |
+
+   Where the kit agrees, `AGENTS.md` links to it instead of restating it. That covers DbContext as the unit of work with no repositories, `IEntityTypeConfiguration`, no lazy loading, `.Select()` projections, never auto-migrating in production, xUnit v3, `FakeTimeProvider`, `IMeterFactory`, `[LoggerMessage]`, low-cardinality tags and strongly typed ids.
+2. **`.claude/rules/`.** The kit ships its 10 rules as files to copy. They are copied in, and `error-handling`, `architecture` and `testing` are edited to match the table above. The others are kept as shipped. Each edited rule starts with a line saying it differs from the kit, and why.
+3. **Repo-owned delta skills.** `domain-modeling`, `ef-core` and `tdd` (below) each begin "Base: `dotnet-claude-kit:<skill>`. Differences in this template:" and hold only the differences plus template-specific procedures.
+
+The architecture tests (§7.10) enforce the most important overrides mechanically: no `ValidationException`, no Mediator/MediatR, no `Result<T>` types, no EF `InMemory`.
+
+**Repo-owned skills** go in `.claude/skills/`. Their names must not collide with kit skills; the builder checks this, and the plugin namespace covers it for the deltas.
 
 | Skill | Purpose |
 |---|---|
-| `domain-modeling` | Aggregates, child entities and strongly typed ids. VOs: private constructor, `Create` returning `OneOf`, `sealed record`. Behavior returns precise `OneOf`; domain events; `IAppError` design, including how to write a good `suggestion`. DB-dependent checks are passed into the domain. Anti-patterns: anemic entities, public setters, logic in actions. |
-| `ef-core` | Mapping rich entities: backing fields, private setters, value converters for single-value VOs, complex types for multi-value VOs, the `Version` concurrency token. Creating and naming migrations, and changes that preserve data (rename vs drop and add). SQLite limits and the Postgres-portable rule. Links to `optimizing-ef-core-queries` for query work. |
-| `tdd` | Integration tests first: write the `{Action}Tests` class with `[Covers]` for the happy path, each error code and the stale case, using the `Preview`/`Execute`/`ShouldFailWith` helpers. Watch it fail, implement domain then action, go green, then run `verify.sh`. Links to `test-anti-patterns` and `assertion-quality`. |
-| `add-action` | The end-to-end recipe, in order: VO(s) → aggregate behavior + domain errors → action/query class → EF mapping + migration → integration test class → optional UI → `verify.sh`. It refers to `tdd`, `domain-modeling`, `ef-core` and `frontend-feature` for each step. |
+| `domain-modeling` | Delta on the kit's `ddd`. OneOf results, VO `Create` returning OneOf, `IAppError` design (including how to write a good `suggestion`), our `IDomainEvent`, and passing DB-dependent checks into the domain. Anti-patterns: anemic entities, public setters, logic in actions. |
+| `ef-core` | Delta on the kit's `ef-core`. Mapping VOs (converters and complex types), the `Version` concurrency token, migrations on SQLite and the Postgres-portable rule, and data-preserving changes. Links to `optimizing-ef-core-queries`. |
+| `tdd` | Delta on the kit's `tdd`/`testing`. Write the `{Action}Tests` class with `[Covers]` for the happy path, each error code, `validation.failed` and the stale case, using the `Preview`/`Execute` helpers and the Shouldly extensions. Watch it fail, implement domain then validator then action, go green, then run `verify.sh`. |
+| `add-action` | The end-to-end recipe, in order: VO(s) → aggregate behavior + domain errors → validator (`MustBeValid` + input rules) → action/query class → EF mapping + migration → integration test class → optional UI → `verify.sh`. It refers to `tdd`, `domain-modeling`, `ef-core` and `frontend-feature` for each step. |
 | `add-aggregate` | A new aggregate root with id VO, EF configuration, migration and first action. |
 | `change-action-contract` | Changing an existing action's input, output or error codes. These are MCP tool contracts that runtime agents depend on, so the skill covers when a change is additive and when it breaks something, how to add instead of rename, and which tests and descriptions to update. |
 | `frontend-feature` | A UI page for an action or query: the generated client, TanStack Query, `<DataTable>`, `<PreviewConfirmDialog>`, and shadcn components added via the CLI. Links to `shadcn`. |
@@ -437,7 +520,8 @@ My call: a **Git template repository**, cloned and then renamed with a script `s
 - Exact interface and method signatures for `IMutation`/`IQuery`/`ActionContext`, and how the registry reflects over them, while keeping the §7.3 guarantees.
 - Package versions. Verify the Aspire 17 compatibility of the CommunityToolkit SQLite and Vite hosting packages, the plugin marketplace names and ids, the `.claude/settings.json` plugin keys, and the shadcn skill command.
 - The wording of each repo-owned skill, within the purposes listed in §7.11.1.
-- The architecture-test library and the test framework details (xUnit v2 vs v3).
+- The architecture-test library (ArchUnitNET or NetArchTest).
+- The FluentValidation bridge internals (`MustBeValid`, `WithSuggestion`, default field codes) within §7.5.
 - Change-set normalization and hashing details, and the JSON shape of `details` per error.
 - UI layout and styling within the shadcn defaults.
 - Router choice and the frontend folder structure.
