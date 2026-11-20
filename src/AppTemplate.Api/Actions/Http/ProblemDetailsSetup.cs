@@ -10,15 +10,20 @@ public static class ProblemDetailsSetup
     {
         services.AddProblemDetails(options => options.CustomizeProblemDetails = Customize);
         services.AddExceptionHandler<UnexpectedExceptionHandler>();
+        services.AddOptions<SecurityOptions>().BindConfiguration(SecurityOptions.Section);
         return services;
     }
 
-    /// <summary>Trace header outermost, then the exception handler, then status-code pages (which only write when the response has no body yet).</summary>
+    /// <summary>
+    /// Trace header outermost, then the exception handler, then status-code pages (which only write when the response
+    /// has no body yet), then the <see cref="OriginCheckMiddleware"/>, so a rejected origin gets the same ProblemDetails.
+    /// </summary>
     public static IApplicationBuilder UseAppProblemDetails(this IApplicationBuilder app)
     {
         app.UseMiddleware<TraceIdMiddleware>();
         app.UseExceptionHandler();
         app.UseStatusCodePages();
+        app.UseMiddleware<OriginCheckMiddleware>();
         return app;
     }
 

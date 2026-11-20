@@ -13,6 +13,7 @@ public static class AppErrorProblemDetails
         ErrorKind.Conflict => StatusCodes.Status409Conflict,
         ErrorKind.Precondition => StatusCodes.Status409Conflict,
         ErrorKind.BadRequest => StatusCodes.Status400BadRequest,
+        ErrorKind.Forbidden => StatusCodes.Status403Forbidden,
         ErrorKind.Unexpected => StatusCodes.Status500InternalServerError,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };

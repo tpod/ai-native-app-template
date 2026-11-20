@@ -57,6 +57,16 @@ public sealed record RequestNotFound(string Path) : AppError
     public override object? Details => new { path = Path };
 }
 
+[Error("request.forbidden_origin", ErrorKind.Forbidden, "Origin not allowed")]
+public sealed record RequestForbiddenOrigin(string Origin) : AppError
+{
+    public override string Message => $"Browser requests from origin '{Origin}' are not allowed.";
+    public override string Suggestion =>
+        "If this origin is trusted, the server operator must add it to the Security:AllowedOrigins configuration. "
+        + "Agents and command-line clients send no Origin header and are not affected.";
+    public override object? Details => new { origin = Origin };
+}
+
 [Error("internal.unexpected", ErrorKind.Unexpected, "Unexpected error")]
 public sealed record InternalUnexpected : AppError
 {

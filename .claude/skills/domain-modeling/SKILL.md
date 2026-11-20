@@ -89,7 +89,7 @@ public sealed record ProjectNameTaken(string Name, ProjectId ExistingProjectId) 
 ```
 
 - Code `area.snake_case`, unique across the solution (`ErrorCodes_AreUniqueAndWellFormed`). The title is stable; never put data in it.
-- `ErrorKind` sets the HTTP status: Validation 422, NotFound 404, Conflict 409 (state clash), Precondition 409 (a precondition the caller must refresh), BadRequest 400, Unexpected 500.
+- `ErrorKind` sets the HTTP status: Validation 422, NotFound 404, Conflict 409 (state clash), Precondition 409 (a precondition the caller must refresh), BadRequest 400, Forbidden 403, Unexpected 500.
 - `Message` is for humans and may include values. `Details` is a small camelCase object an agent can act on: ids, the conflicting value. Never put secrets or whole entities in it.
 - **A good `Suggestion`** is the next step the caller can take, names the tool that helps, and never restates the error:
   - Good: "Choose a different name; list_projects shows existing names."

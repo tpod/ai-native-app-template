@@ -23,7 +23,7 @@ description: >
   Rationale: try-catch obscures the happy path and makes code harder to reason about.
 
 - **DO** model each error as a `sealed record` deriving from `AppError`, with `[Error("<area>.<snake_case>", ErrorKind.X, "Stable title")]`, and override `Message`, `Suggestion` and, when useful, `Details`.
-  Rationale: `ErrorKind` (`Validation`, `NotFound`, `Conflict`, `Precondition`, `BadRequest`, `Unexpected`) maps to the HTTP status in one place, and the code is the stable contract agents act on.
+  Rationale: `ErrorKind` (`Validation`, `NotFound`, `Conflict`, `Precondition`, `BadRequest`, `Forbidden`, `Unexpected`) maps to the HTTP status in one place, and the code is the stable contract agents act on.
 
 ```csharp
 // DO: a domain error (src/AppTemplate.Domain/Projects/ProjectErrors.cs)

@@ -50,6 +50,27 @@ public sealed partial class ErrorCodeTests
         problems.ShouldBeEmpty(string.Join(Environment.NewLine, problems));
     }
 
+    /// <summary>The "Framework codes" line in AGENTS.md lists exactly the error codes the Api framework defines.</summary>
+    [Fact]
+    public void FrameworkErrorCodes_MatchAgentsMd()
+    {
+        var defined = typeof(ActionRegistryOptions).Assembly.GetTypes()
+            .Where(t => !t.IsAbstract && typeof(AppError).IsAssignableFrom(t) && t.Namespace?.Contains(".Features", StringComparison.Ordinal) != true)
+            .Select(t => t.GetCustomAttributes(typeof(ErrorAttribute), inherit: false).Cast<ErrorAttribute>().Single().Code)
+            .ToHashSet(StringComparer.Ordinal);
+        defined.ShouldNotBeEmpty();
+
+        var line = File.ReadLines(Path.Combine(SkillLintTests.FindRepoRoot(), "AGENTS.md"))
+            .SingleOrDefault(l => l.StartsWith("- Framework codes:", StringComparison.Ordinal));
+        line.ShouldNotBeNull("AGENTS.md must keep a '- Framework codes:' line under Errors.");
+        var documented = BacktickedCode().Matches(line).Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+
+        documented.OrderBy(c => c, StringComparer.Ordinal).ShouldBe(defined.OrderBy(c => c, StringComparer.Ordinal));
+    }
+
     [GeneratedRegex(@"^[a-z_]+\.[a-z_]+$")]
     private static partial Regex CodePattern();
+
+    [GeneratedRegex(@"`([a-z_]+\.[a-z_]+)`")]
+    private static partial Regex BacktickedCode();
 }

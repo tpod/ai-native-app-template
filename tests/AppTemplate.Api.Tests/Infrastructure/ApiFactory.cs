@@ -25,6 +25,9 @@ public sealed class ApiFactory(bool includeFixtures = true, string? webRoot = nu
 
     public ActivityCapture Activities { get; } = new();
 
+    /// <summary>Configuration keys added to the host (in-memory, highest priority). Change them before the host builds.</summary>
+    public Dictionary<string, string?> Settings { get; } = new() { ["Preview:SigningKey"] = SigningKey };
+
     /// <summary>Lets a later task register extra services (for example an <see cref="IModelContributor"/>) before the host builds.</summary>
     public Action<IServiceCollection>? ConfigureTestServices { get; set; }
 
@@ -37,10 +40,7 @@ public sealed class ApiFactory(bool includeFixtures = true, string? webRoot = nu
             builder.UseWebRoot(webRoot);
         }
 
-        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["Preview:SigningKey"] = SigningKey,
-        }));
+        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(Settings));
         builder.ConfigureLogging(logging =>
         {
             logging.ClearProviders();

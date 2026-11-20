@@ -255,7 +255,7 @@ public sealed partial class SkillLintTests
         ];
     }
 
-    private static string FindRepoRoot()
+    internal static string FindRepoRoot()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {

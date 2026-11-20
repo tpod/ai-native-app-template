@@ -104,10 +104,16 @@ MCP `structuredContent` is always a JSON object: a list result arrives as `{ "it
 Every error is RFC 9457 ProblemDetails (`application/problem+json`), the same JSON on HTTP and on MCP (`isError: true`): `type`, `title`, `status`, `detail`, `instance`, plus `code`, `details`, `suggestion` and `traceId`. Every response carries an `X-Trace-Id` header.
 
 - Define errors as `sealed record`s deriving from `AppError` with `[Error("area.snake_case", ErrorKind.X, "Stable title")]`. See `src/AppTemplate.Domain/Projects/ProjectErrors.cs`.
-- Codes match `^[a-z_]+\.[a-z_]+$` and are unique. Status comes from `ErrorKind`: Validation 422, NotFound 404, Conflict 409, Precondition 409, BadRequest 400, Unexpected 500.
+- Codes match `^[a-z_]+\.[a-z_]+$` and are unique. Status comes from `ErrorKind`: Validation 422, NotFound 404, Conflict 409, Precondition 409, BadRequest 400, Forbidden 403, Unexpected 500.
 - `validation.failed` lists `details.fields[]` with `{ field, code, message, suggestion }`. Field codes come from the VO error (`project_name.too_long`) or `.WithErrorCode`.
 - A good `suggestion` is the next step an agent can take, and names a tool when one helps: "Choose a different name; list_projects shows existing names." It never just restates the error.
-- Framework codes: `request.malformed`, `request.not_found`, `internal.unexpected`, `preview.token_invalid`, `preview.token_mismatch`, `preview.expired`, `preview.stale`, `preview.already_executed`.
+- Framework codes: `request.malformed`, `request.not_found`, `request.forbidden_origin`, `internal.unexpected`, `preview.token_invalid`, `preview.token_mismatch`, `preview.expired`, `preview.stale`, `preview.already_executed`.
+
+## Security
+
+- **Origin check (DNS-rebinding protection).** `OriginCheckMiddleware` (`src/AppTemplate.Api/Actions/Http/OriginCheckMiddleware.cs`) guards `/api` and `/mcp`. A request with an `Origin` header passes only from a loopback origin (`http(s)://localhost`, `127.0.0.1` or `[::1]`, any port) or an origin listed in `Security:AllowedOrigins`. Anything else gets `403 request.forbidden_origin`. Requests without `Origin` (agents, MCP clients, curl) pass. The Vite dev proxy forwards the browser's localhost `Origin`, so the dev UI passes.
+- **Production.** Add the app's public origin, for example `https://app.example.com`, to `Security:AllowedOrigins` (env `Security__AllowedOrigins__0`), or the deployed UI gets 403. Set `AllowedHosts` to the real host names. Development already restricts it to `localhost;127.0.0.1` in `appsettings.Development.json`.
+- Auth is deferred in v1. Don't expose the Api beyond localhost without adding it.
 
 ## Commands
 

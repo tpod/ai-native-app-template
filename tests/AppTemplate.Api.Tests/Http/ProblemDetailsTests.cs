@@ -47,6 +47,16 @@ public sealed class ProblemDetailsTests : ApiTestBase
         AppErrorProblemDetails.StatusFor(ErrorKind.Conflict).ShouldBe(409);
         AppErrorProblemDetails.StatusFor(ErrorKind.Precondition).ShouldBe(409);
         AppErrorProblemDetails.StatusFor(ErrorKind.BadRequest).ShouldBe(400);
+        AppErrorProblemDetails.StatusFor(ErrorKind.Forbidden).ShouldBe(403);
         AppErrorProblemDetails.StatusFor(ErrorKind.Unexpected).ShouldBe(500);
+    }
+
+    [Fact]
+    public void StatusFor_EveryKind_IsMapped()
+    {
+        var kinds = Enum.GetValues<ErrorKind>();
+        kinds.Length.ShouldBe(7);
+
+        kinds.Select(AppErrorProblemDetails.StatusFor).ShouldAllBe(s => s >= 400 && s <= 599);
     }
 }
