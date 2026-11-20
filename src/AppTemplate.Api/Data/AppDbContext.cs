@@ -11,6 +11,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, IEnumer
 
     public DbSet<Project> Projects => Set<Project>();
 
+    /// <summary>Append-only business history. Only the action pipeline adds rows.</summary>
+    public DbSet<HistoryEntry> History => Set<HistoryEntry>();
+
     internal string ContributorKey => string.Join('|', _contributors.Select(c => c.GetType().AssemblyQualifiedName));
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
