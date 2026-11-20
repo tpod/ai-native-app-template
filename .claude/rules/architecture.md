@@ -61,7 +61,8 @@ src/AppTemplate.Api/
 ```
 
 - **Dependency direction is inward.** `AppTemplate.Domain` depends only on OneOf: no EF Core, ASP.NET Core or Api references (`Domain_References_OnlyOneOf` enforces it). `AppTemplate.Api` depends on Domain. Never reverse this arrow.
-- **Behavior lives on the aggregate.** Actions load data and call domain methods; the decision stays in the domain. Checks that need the database (such as name uniqueness) are loaded by the action and passed into the domain method as data.
+- **Behavior lives on the aggregate.** Actions load data and call domain methods; the decision stays in the domain. Checks that need the database (such as name uniqueness) are loaded by the action and passed into the domain method as data. Every method that changes state raises a domain event with `[Event]`, so history stays complete.
+- **Every state change goes through an action.** Imports, scheduled jobs and admin tasks call an action through `ActionRunner`; they never change aggregates or call `SaveChanges`, `ExecuteUpdate`, `ExecuteDelete` or `ExecuteSql*` themselves. `StateChangeTests` allows exactly one save, in `ActionPipeline`. A new project containing state-changing code must be added to that test.
 - **Module boundaries enforced through project references.** If two modules should not couple, they must not have a project reference. Use integration events or a shared contracts project for cross-module communication.
 
 ## Shared Kernel

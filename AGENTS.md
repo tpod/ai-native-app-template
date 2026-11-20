@@ -25,6 +25,7 @@ src/
   AppTemplate.Api/
     Actions/                    # framework: registry, pipeline, preview token, validation bridge, Http/, Telemetry/
     Features/<Aggregate>/       # one file per action or query, plus <Aggregate>Validators.cs
+    Features/History/           # get_history: every aggregate's business history
     Data/                       # AppDbContext, EF configurations, ValueObjectConventions, Migrations/
     Mcp/                        # MCP wiring and server instructions; tools are generated from the registry
   web/                          # React + Vite + TypeScript, Tailwind v4, shadcn/ui, TanStack Query + Table
@@ -45,10 +46,11 @@ tests/
 5. **Never hand-write endpoints or MCP tools** for actions. No controllers, `MapPost`, `IEndpointGroup` or `[McpServerTool]`.
 6. **No provider-specific SQL in domain or feature code.** Provider details stay in `src/AppTemplate.Api/Data`. See `skill:ef-core`.
 7. **Validation never throws.** FluentValidation `AbstractValidator<TInput>` in the Api, using `RuleFor(x => x.Name).MustBeValid(ProjectName.Create)`, `.WithSuggestion("…")` and `.WithErrorCode("…")`. Never `ValidateAndThrow` or `ValidationException`.
-8. **Behavior lives on the aggregate.** No public setters. Actions load data, including DB-dependent checks such as uniqueness, and pass it into the domain method.
+8. **Behavior lives on the aggregate.** No public setters. Actions load data, including DB-dependent checks such as uniqueness, and pass it into the domain method. Every method that changes state raises a domain event with `[Event("<aggregate>.<verb>", 1)]`; a change without one fails as `internal.unexpected`.
 9. **Changing an action's input, output or error codes changes an MCP contract.** Follow `skill:change-action-contract`.
+10. **Every state change goes through an action.** Imports, scheduled jobs and admin tasks call an action through `ActionRunner`. They never change aggregates or call `SaveChanges` themselves. This is what keeps history, validation, stale checks and telemetry complete. A new project containing state-changing code must be added to `StateChangeTests`.
 
-`tests/AppTemplate.Architecture.Tests` enforces these mechanically. It bans `ValidationException`, Mediator, MediatR, any `Result`/`Result<T>` type (including `OneOf.Types.Result`) and the EF InMemory provider. It also requires `IAggregateRoot.Version` to be a concurrency token, and checks layering, error codes and `[Covers]` coverage.
+`tests/AppTemplate.Architecture.Tests` enforces these mechanically. It bans `ValidationException`, Mediator, MediatR, any `Result`/`Result<T>` type (including `OneOf.Types.Result`) and the EF InMemory provider. It also requires `IAggregateRoot.Version` to be a concurrency token, and checks layering, error codes, `[Event]` names, `[Covers]` coverage and that only `ActionPipeline` saves (`StateChangeTests`).
 
 **Test rules** (details in `.claude/rules/testing.md`):
 
@@ -98,6 +100,15 @@ MCP `structuredContent` is always a JSON object: a list result arrives as `{ "it
 - `preview.already_executed` (a create whose id already exists) → don't retry; query to confirm.
 - A no-op mutation previews empty `changes` and does not bump `Version`.
 - The UI follows the same flow through `<PreviewConfirmDialog>`.
+- Execute accepts an optional `reason` (string, at most 500 characters) beside `previewToken`. It is stored in history and not bound by the token. No input record may declare a `reason` property.
+
+## History
+
+Every committed execute stores each domain event it raised as an append-only row in the `History` table, in the same transaction as the aggregate change. A row holds the event's `[Event]` name and version, the payload, the aggregate type, id and version, the action, the channel (`http`, `mcp` or `in_process`), the MCP client when known, the caller's `reason` and the `traceId`.
+
+- Read it with the `get_history` query (`aggregateType`, `aggregateId`, optional `afterId` and `limit`), oldest first.
+- Event names are the history contract: never rename one; bump its version when the payload changes. `EventNameTests` checks they are unique and well formed.
+- A preview, a stale execute and a failed execute write nothing.
 
 ## Errors
 
@@ -134,7 +145,7 @@ Every error is RFC 9457 ProblemDetails (`application/problem+json`), the same JS
 
 ## Observability and debugging
 
-Debug in this order (`skill:investigate`): error `code` → `traceId` → trace and logs in the Aspire dashboard or the `aspire` MCP server → the failing test's output.
+Debug in this order (`skill:investigate`): error `code` → `traceId` → trace and logs in the Aspire dashboard or the `aspire` MCP server → the failing test's output. When an aggregate is in an unexpected state, start with `get_history`: it is the durable record, and each row's `traceId` leads to the trace while it is retained.
 
 - Every action phase is a span named `action {name} {phase}` (phase `preview`, `execute` or `query`) on the `AppTemplate.Actions` ActivitySource. Tags: `action.name`, `action.phase`, `action.outcome` (`success` or the error code), `aggregate.type`, `aggregate.id`, `preview.stale_reason`. The `AppTemplate.Actions` Meter counts calls and durations.
 - Integration tests write each request's spans and response body to the test output, shown when a test fails.
