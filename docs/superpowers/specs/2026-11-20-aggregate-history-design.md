@@ -21,6 +21,7 @@ The template already has most of the parts. Aggregates raise business-meaningful
 - Let callers attach an optional free-text `reason` to any execute, stored on that execute's rows.
 - Record which action, channel, `traceId` and, where available, MCP client produced each row.
 - Expose history through one generic `get_history` query, available as an MCP tool, an HTTP query and in OpenAPI.
+- Let people see the same history in the web UI: a small history icon on every entity opens its history (user request, 2026-11-20).
 - Make "every state change goes through an action" a written rule, enforced by an architecture test.
 - Give in-process code (imports, scheduled jobs, admin tasks) a supported way to run an action: `ActionRunner`.
 
@@ -33,7 +34,7 @@ The template already has most of the parts. Aggregates raise business-meaningful
 - **A cross-aggregate timeline.** History is per aggregate in v1. A correlation key can come later.
 - **Authenticated user attribution.** Auth is deferred in v1, so there is no user to record. Channel, client and `reason` are what v1 attributes.
 - **PII erasure and retention.** Rows are kept forever and never edited. See Risks.
-- **UI.** The web client sends no `reason` and shows no history in v1.
+- **A `reason` field in the UI.** The web client sends no `reason` in v1. It does show history (§10).
 - **Durable event delivery or an outbox.** Dispatch to `IDomainEventHandler` stays exactly as it is.
 
 ## Anti-goals
@@ -212,6 +213,28 @@ Feature tests: `GetHistoryTests` (above), plus one Project-level test that renam
 Architecture tests: `[Event]` presence, format and uniqueness, and `StateChanges_GoThroughActionPipeline`.
 
 `scripts/verify.sh` prints `VERIFY OK`.
+
+### 10. History in the web UI
+
+**User request:** a small icon on every entity the UI shows. Clicking it shows that entity's business history.
+
+- **Component.** A reusable `<HistoryButton aggregateType aggregateId />` in `src/web/src/components/history-button.tsx`, next to `<DataTable>` and `<PreviewConfirmDialog>`. It's framework UI, so `skill:remove-example` keeps it.
+- **Look.** A ghost icon button with the lucide `History` icon (lucide-react is already installed), sized to sit beside a title or in a table row. A tooltip on hover or focus says "Business history". It has an `aria-label`.
+- **On click.** A shadcn `Sheet` (side panel) opens with the history newest first, fetched with `get_history` through the typed client and TanStack Query, only when opened. Each entry shows:
+  - a readable event label derived from `eventType` (`project.renamed` → "Project renamed")
+  - relative time, with the absolute time in a tooltip
+  - action and channel as small badges
+  - `reason` in quotes, labelled "Reason given", when present
+  - the payload as a compact key/value list
+  - the `traceId`, with a copy button
+
+  It handles loading, empty ("No history recorded yet.") and errors (`<ProblemAlert>`). It shows the first page, with "Load more" using `afterId`.
+- **Freshness.** After any execute, the existing "invalidate every non-preview query" rule (commit `505f00b`) refreshes an open panel.
+- **Placement in the example.** Beside the project name on the detail page; in each row of the projects list; in each task row on the detail page.
+- **Child entities (my call).** Child entities have no history of their own, because events belong to the root. A task row's icon opens the **project's** history, filtered to entries whose payload has a `taskId` equal to that task. The filter runs on the client, through an optional `filter` prop (payload key and value). The panel says "Showing entries for this task — show all" to undo the filter. A server-side entity filter is deferred.
+- **Rule for new UI.** `skill:frontend-feature` says: every page that shows an aggregate or child entity puts a `<HistoryButton>` on it. `AGENTS.md` Frontend rules says the same in one line. This is a convention, not a test.
+- **New shadcn components:** `sheet` and `tooltip`, added with `npx shadcn@latest add sheet tooltip` from `src/web`. Nothing in `components/ui/*` is hand-edited.
+- **Verification:** `npm run typecheck`, `lint` and `build` through `scripts/verify.sh`. The web app has no component test setup, so the builder checks the panel by running the AppHost and says so in the PR.
 
 ## Risks
 
