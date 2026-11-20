@@ -57,6 +57,36 @@ tests/
 - Shouldly only, names `Method_State_Expected`, and pass `TestContext.Current.CancellationToken` where the analyzer asks.
 - Framework tests (`Actions/`, `Mcp/`, `OpenApi/`, `Telemetry/`, `Http/`, `Infrastructure/`) use only the `fixture_*` Note actions in `tests/AppTemplate.Api.Tests/Fixtures/Notes` and never reference the Projects example. Register fixtures through `ActionRegistryOptions.Types` (`NoteFixture.Register`), never by scanning the Api.Tests assembly: it holds deliberately invalid handlers.
 
+## Adding a feature
+
+Detail: `skill:add-action`. Write the tests first (`skill:tdd`).
+
+1. Value object(s) in `src/AppTemplate.Domain/<Aggregate>/`: private constructor, `Create` returning OneOf.
+2. Aggregate behavior returning OneOf, plus its `AppError` records with `[Error]`.
+3. Validator in `<Aggregate>Validators.cs`: `MustBeValid(Vo.Create)` plus input-only rules.
+4. The `[Action]` or `[Query]` class in `src/AppTemplate.Api/Features/<Aggregate>/`.
+5. EF mapping in `src/AppTemplate.Api/Data/` and a migration (see Commands).
+6. `{ActionClass}Tests` in `tests/AppTemplate.Api.Tests/Features/<Aggregate>/` with `[Covers]` for HappyPath, each error code and Stale.
+7. `scripts/update-openapi.sh`, then `cd src/web && npm run gen:api`.
+8. Optional UI: a page using `<DataTable>` and `<PreviewConfirmDialog>` (`skill:frontend-feature`).
+9. `scripts/verify.sh` must print `VERIFY OK`.
+
+Skill map:
+
+| Task | Skill |
+|---|---|
+| New action or query | `skill:add-action` |
+| New aggregate root | `skill:add-aggregate` |
+| Value objects, domain errors, events | `skill:domain-modeling` |
+| EF mapping, migrations | `skill:ef-core` |
+| Tests first, `[Covers]` | `skill:tdd` |
+| Change an action's input, output or error codes | `skill:change-action-contract` |
+| UI page | `skill:frontend-feature` |
+| Debug a failure | `skill:investigate` |
+| Delete the Projects example | `skill:remove-example` |
+| Rename the template | `skill:rename-template` |
+| Move to Postgres | `skill:swap-to-postgres` |
+
 ## Preview protocol
 
 Every mutation is previewed first. Over MCP: `preview_<name>` → show the user `summary` and `changes` (and `warnings`) → get confirmation → `<name>` with the same input plus `previewToken`. Over HTTP: `POST /api/actions/<name>/preview`, then `POST /api/actions/<name>` with the input fields plus `previewToken`. Queries are `POST /api/queries/<name>` and need no preview.
@@ -131,15 +161,19 @@ dotnet-claude-kit is the base. Where it conflicts with this file, this file wins
 | Domain events implement Mediator `INotification` | Our own `IDomainEvent`, handled by `IDomainEventHandler<T>` after commit. Domain depends only on OneOf |
 | Integration tests on Testcontainers Postgres | In-memory **SQLite** with real migrations. EF `InMemory` stays banned, as in the kit |
 | Clean Architecture in 4 projects (Domain/Application/Infrastructure/Api) | **Domain + Api** (see the architecture map). Judge `/arch-check` against that map |
-| Value objects validate in the constructor | Private constructor + `Create` returning OneOf |
+| Value objects validate in the constructor; positional records (public constructor) for value objects | `sealed` record with a private constructor + `Create` returning OneOf (golden rule 3). `ValueObjects_AreSealedWithoutPublicParameterizedConstructors` enforces it. Positional records stay fine for DTOs and inputs |
 | Assertions with xUnit `Assert` | **Shouldly** only. No `Assert.*`, no FluentAssertions |
-| `dotnet test` with VSTest options; piping into `hooks/post-test-analyze.sh` | **MTP commands**: `dotnet test --solution AppTemplate.slnx` or `--project … --filter …`; exit 8 = no tests matched. That hook script ships in the plugin, not this repo |
+| `dotnet test` with VSTest options; piping into `hooks/post-test-analyze.sh` | **MTP commands**: `dotnet test --solution AppTemplate.slnx` or `--project … --filter …`; exit 8 = no tests matched. Don't pipe test output into the hook script (it isn't in this repo, and the pipe hides the exit code); read `dotnet test`'s own exit code, as `scripts/verify.sh` does |
 | ProblemDetails for errors | Same, plus the required extensions `code`, `details`, `suggestion` and `traceId` |
 | Aspire examples with `AddPostgres` / `AddNpgsqlDbContext` | `AddSqlite` for v1; Postgres only via `skill:swap-to-postgres` |
 | `/dotnet-init` to set up a project | **Never run `/dotnet-init`.** It overwrites `CLAUDE.md`, which must stay `@AGENTS.md` |
 | (official `aspire` plugin) run `aspire agent init` | **Never run `aspire agent init`.** It writes hooks into user-level `~/.claude/settings.json`. The Aspire MCP server is already in `.mcp.json` |
 | Async suffix on every async method; one type per file; `internal` by default | Action convention methods are named exactly `Load`, `Apply` and `Run`. An action file holds its input record and handler; validators are grouped in `<Aggregate>Validators.cs`. Handlers, inputs, validators and errors are `public` |
-| `[Authorize]`/`[AllowAnonymous]` on every endpoint; `dotnet add package Mediator…` examples | No auth in v1, and endpoints are generated. Never add Mediator or MediatR |
+| `[Authorize]`/`[AllowAnonymous]` on every endpoint; `dotnet add package Mediator…` examples | Auth is deferred in v1, and endpoints are generated. Never add Mediator or MediatR |
+| HTTPS everywhere, no exceptions | Local dev runs over http through the AppHost's `http` profile (`ASPIRE_ALLOW_UNSECURED_TRANSPORT=true`). Production must terminate TLS |
+| Branch prefixes `feature/`, `fix/`, `refactor/` | Conventional Commit types as branch prefixes: `feat/…`, `fix/…`, `refactor/…` |
+| `/verify` or `dotnet build` + `dotnet test` before a PR | `scripts/verify.sh` is required: it also checks client drift and the web build |
+| "Check AGENTS.md for the routing table / skill maps" | Use the skill map under "Adding a feature". There is no agent routing table; the kit's agents work as its plugin describes |
 
 The edited kit rules in `.claude/rules/` (`architecture.md`, `error-handling.md`, `testing.md`) carry the same overrides.
 
@@ -147,7 +181,7 @@ The edited kit rules in `.claude/rules/` (`architecture.md`, `error-handling.md`
 
 ## Plugins and prerequisites
 
-`.claude/settings.json` declares these plugins. After you trust this folder, Claude Code registers their marketplaces, but each developer installs the plugins once: `claude plugin install <plugin>@<marketplace> --scope user` for each row, then `/reload-plugins`.
+`.claude/settings.json` declares these plugins. After you trust this folder, Claude Code registers their marketplaces, but each developer installs the plugins once per clone: `claude plugin install <plugin>@<marketplace> --scope project` for each row, then `/reload-plugins`. Project scope enables them only in this repo's `.claude/settings.json`, which already lists them, so nothing changes in `~/.claude/settings.json` or in other repos. Never use `--scope user` (the default): it turns the kit's hooks on in every repo.
 
 | Plugin | Marketplace (repo) | Use it for |
 |---|---|---|
