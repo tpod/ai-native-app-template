@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Text.Json;
 using AppTemplate.Api.Actions.Events;
+using AppTemplate.Api.Actions.Telemetry;
 using AppTemplate.Api.Actions.Preview;
 using AppTemplate.Api.Actions.Validation;
 using AppTemplate.Api.Data;
@@ -31,7 +33,8 @@ public sealed partial class ActionPipeline(
     PreviewTokenSigner signer,
     TimeProvider time,
     IOptions<JsonOptions> jsonOptions,
-    ILogger<ActionPipeline> logger)
+    ILogger<ActionPipeline> logger,
+    ActionMetrics metrics)
 {
     /// <summary>Stale reasons reported in <c>details.reason</c> of <c>preview.stale</c>.</summary>
     public static class StaleReasons
@@ -48,9 +51,15 @@ public sealed partial class ActionPipeline(
     /// Load, Summarize and Apply without saving; returns the change set and a signed token that binds it.
     /// Domain events are reported as side effects, then cleared; a preview never dispatches them.
     /// </summary>
-    public async Task<OneOf<PreviewResponse, AppError>> PreviewAsync(ActionDescriptor action, JsonElement body, CancellationToken ct)
+    public Task<OneOf<PreviewResponse, AppError>> PreviewAsync(ActionDescriptor action, JsonElement body, CancellationToken ct)
     {
         RequireKind(action, ActionKind.Mutation);
+        return InstrumentAsync(action, "preview", activity => PreviewCoreAsync(action, body, activity, ct));
+    }
+
+    private async Task<OneOf<PreviewResponse, AppError>> PreviewCoreAsync(
+        ActionDescriptor action, JsonElement body, Activity? activity, CancellationToken ct)
+    {
         await using var scope = scopes.CreateAsyncScope();
         var services = scope.ServiceProvider;
 
@@ -71,6 +80,7 @@ public sealed partial class ActionPipeline(
         }
 
         var target = loaded.Value;
+        TagAggregate(activity, db, target);
         var versions = AggregateVersions(db);
         var summary = action.Summarize!(handler, target, input);
 
@@ -105,9 +115,15 @@ public sealed partial class ActionPipeline(
     /// <c>ToResult</c>. Events are dispatched in the execute scope after the commit; a handler exception then surfaces
     /// as a 500 although the change is already saved (no outbox, by design).
     /// </remarks>
-    public async Task<OneOf<ExecuteResponse, AppError>> ExecuteAsync(ActionDescriptor action, JsonElement body, CancellationToken ct)
+    public Task<OneOf<ExecuteResponse, AppError>> ExecuteAsync(ActionDescriptor action, JsonElement body, CancellationToken ct)
     {
         RequireKind(action, ActionKind.Mutation);
+        return InstrumentAsync(action, "execute", activity => ExecuteCoreAsync(action, body, activity, ct));
+    }
+
+    private async Task<OneOf<ExecuteResponse, AppError>> ExecuteCoreAsync(
+        ActionDescriptor action, JsonElement body, Activity? activity, CancellationToken ct)
+    {
         await using var scope = scopes.CreateAsyncScope();
         var services = scope.ServiceProvider;
 
@@ -145,6 +161,11 @@ public sealed partial class ActionPipeline(
         var handler = ActivatorUtilities.GetServiceOrCreateInstance(services, action.HandlerType);
 
         var loaded = await action.LoadAsync!(handler, input, ctx);
+        if (loaded.Index == 0)
+        {
+            TagAggregate(activity, db, loaded.Value);
+        }
+
         if (await AnyCreatedAggregateExistsAsync(db, ct))
         {
             return new PreviewAlreadyExecuted(action.Name);
@@ -203,9 +224,14 @@ public sealed partial class ActionPipeline(
     }
 
     /// <summary>Runs a query in its own scope and returns its output.</summary>
-    public async Task<OneOf<object, AppError>> QueryAsync(ActionDescriptor action, JsonElement body, CancellationToken ct)
+    public Task<OneOf<object, AppError>> QueryAsync(ActionDescriptor action, JsonElement body, CancellationToken ct)
     {
         RequireKind(action, ActionKind.Query);
+        return InstrumentAsync(action, "query", _ => QueryCoreAsync(action, body, ct));
+    }
+
+    private async Task<OneOf<object, AppError>> QueryCoreAsync(ActionDescriptor action, JsonElement body, CancellationToken ct)
+    {
         await using var scope = scopes.CreateAsyncScope();
         var services = scope.ServiceProvider;
 
@@ -293,6 +319,62 @@ public sealed partial class ActionPipeline(
         IReadOnlyList<SideEffect> sideEffects =
             [.. events.Select(e => new SideEffect(e.GetType().Name, JsonSerializer.SerializeToNode(e, e.GetType(), Json)!))];
         return (changes, sideEffects, events);
+    }
+
+    /// <summary>
+    /// Wraps one phase in its span, records metrics once, and logs an <see cref="AppError"/> result once at the boundary.
+    /// Unhandled exceptions are tagged <c>internal.unexpected</c> and rethrown; the host's exception handlers log them.
+    /// </summary>
+    private async Task<OneOf<T, AppError>> InstrumentAsync<T>(
+        ActionDescriptor action, string phase, Func<Activity?, Task<OneOf<T, AppError>>> run)
+    {
+        using var activity = ActionTelemetry.Source.StartActivity($"action {action.Name} {phase}");
+        activity?.SetTag(ActionTelemetry.TagName, action.Name);
+        activity?.SetTag(ActionTelemetry.TagPhase, phase);
+        var started = Stopwatch.GetTimestamp();
+        var outcome = ActionTelemetry.OutcomeUnexpected;
+        try
+        {
+            var result = await run(activity);
+            if (result.TryPickT1(out var error, out _))
+            {
+                outcome = error.Code;
+                if (error is PreviewStale stale)
+                {
+                    activity?.SetTag(ActionTelemetry.TagStaleReason, stale.Reason);
+                }
+
+                ActionLog.ActionFailed(logger, action.Name, phase, error.Code, (activity ?? Activity.Current)?.TraceId.ToString() ?? "");
+            }
+            else
+            {
+                outcome = ActionTelemetry.OutcomeSuccess;
+            }
+
+            return result;
+        }
+        catch
+        {
+            activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        finally
+        {
+            activity?.SetTag(ActionTelemetry.TagOutcome, outcome);
+            metrics.Record(action.Name, phase, outcome, Stopwatch.GetElapsedTime(started));
+        }
+    }
+
+    private static void TagAggregate(Activity? activity, AppDbContext db, object target)
+    {
+        if (activity is null)
+        {
+            return;
+        }
+
+        var entry = db.Entry(target);
+        activity.SetTag(ActionTelemetry.TagAggregateType, entry.Metadata.ClrType.Name);
+        activity.SetTag(ActionTelemetry.TagAggregateId, ChangeSetReader.KeyOf(entry));
     }
 
     private static object CauseOf(AppError error) => new { code = error.Code, message = error.Message };

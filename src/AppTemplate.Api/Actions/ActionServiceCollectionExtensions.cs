@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AppTemplate.Api.Actions.Events;
 using AppTemplate.Api.Actions.Preview;
+using AppTemplate.Api.Actions.Telemetry;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -59,6 +60,7 @@ public static class ActionServiceCollectionExtensions
         services.AddPreviewTokens();
         services.AddValidatorsFromAssembly(typeof(Program).Assembly);
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<ActionMetrics>();
         services.TryAddSingleton<ActionPipeline>();
         services.TryAddScoped<DomainEventDispatcher>();
 
