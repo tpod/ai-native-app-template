@@ -106,7 +106,7 @@ MCP `structuredContent` is always a JSON object: a list result arrives as `{ "it
 
 Every committed execute stores each domain event it raised as an append-only row in the `History` table, in the same transaction as the aggregate change. A row holds the event's `[Event]` name and version, the payload, the aggregate type, id and version, the action, the channel (`http`, `mcp` or `in_process`), the MCP client when known, the caller's `reason` and the `traceId`.
 
-- Read it with the `get_history` query (`aggregateType`, `aggregateId`, optional `afterId` and `limit`), oldest first.
+- Read it with the `get_history` query (`aggregateType`, `aggregateId`, optional `limit`), oldest first paged with `afterId`, or `newestFirst: true` paged back with `beforeId`.
 - Event names are the history contract: never rename one; bump its version when the payload changes. `EventNameTests` checks they are unique and well formed.
 - A preview, a stale execute and a failed execute write nothing.
 

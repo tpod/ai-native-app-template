@@ -19,8 +19,8 @@ type Props = {
   enabled: boolean
 }
 
-/** The page size asked of get_history; at its maximum, so most aggregates fit in one page. */
-const PAGE_SIZE = 200
+/** The page size asked of get_history. Pages run newest first; "Load more" fetches older entries. */
+const PAGE_SIZE = 50
 
 /** `project.task_added` → `Project task added`. */
 function eventLabel(eventType: string) {
@@ -57,7 +57,8 @@ export function HistoryPanel({ aggregateType, aggregateId, filter, enabled }: Pr
   const [showAll, setShowAll] = useState(false)
   const query = useInfiniteQuery({
     queryKey: ['history', aggregateType, aggregateId],
-    queryFn: ({ pageParam }) => runQuery('get_history', { aggregateType, aggregateId, afterId: pageParam, limit: PAGE_SIZE }),
+    queryFn: ({ pageParam }) =>
+      runQuery('get_history', { aggregateType, aggregateId, newestFirst: true, beforeId: pageParam, limit: PAGE_SIZE }),
     // int64 ids arrive typed as string | number from the OpenAPI schema; they are passed back unchanged.
     initialPageParam: undefined as Entry['id'] | undefined,
     getNextPageParam: (last) => ('data' in last && last.data.length === PAGE_SIZE ? last.data[last.data.length - 1].id : undefined),
@@ -70,7 +71,7 @@ export function HistoryPanel({ aggregateType, aggregateId, filter, enabled }: Pr
   const problem = query.data.pages.find((p) => 'problem' in p)
   if (problem && 'problem' in problem) return <ProblemAlert problem={problem.problem} />
 
-  const all = query.data.pages.flatMap((p) => ('data' in p ? p.data : [])).reverse()
+  const all = query.data.pages.flatMap((p) => ('data' in p ? p.data : []))
   const filtered = filter && !showAll
   const entries = filtered ? all.filter((e) => matches(e, filter)) : all
 
@@ -84,7 +85,7 @@ export function HistoryPanel({ aggregateType, aggregateId, filter, enabled }: Pr
           </Button>
         </p>
       )}
-      {entries.length === 0 && <p className="text-muted-foreground">No history recorded yet.</p>}
+      {entries.length === 0 && !query.hasNextPage && <p className="text-muted-foreground">No history recorded yet.</p>}
       <ol className="space-y-3">
         {entries.map((entry) => (
           <li key={entry.id} className="space-y-2 rounded-lg border p-3">

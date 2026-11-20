@@ -99,6 +99,34 @@ public sealed class GetHistoryTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Query_NewestFirstLimit1_ReturnsLatest()
+    {
+        var id = await CreateNote("hello");
+        (await PreviewAndExecute("fixture_edit_note", new { noteId = id, text = "edited" })).execute.ShouldSucceed();
+
+        var q = await Query("get_history", new { aggregateType = "Note", aggregateId = id, newestFirst = true, limit = 1 });
+
+        q.ShouldSucceed();
+        q.Body.GetArrayLength().ShouldBe(1);
+        q.Body[0].GetProperty("eventType").GetString().ShouldBe("note.edited");
+    }
+
+    [Fact]
+    public async Task Query_NewestFirstBeforeId_ReturnsOlderPage()
+    {
+        var id = await CreateNote("hello");
+        (await PreviewAndExecute("fixture_edit_note", new { noteId = id, text = "edited" })).execute.ShouldSucceed();
+        (await PreviewAndExecute("fixture_edit_note", new { noteId = id, text = "again" })).execute.ShouldSucceed();
+        var first = await Query("get_history", new { aggregateType = "Note", aggregateId = id, newestFirst = true, limit = 1 });
+        var newest = first.Body[0].GetProperty("id").GetInt64();
+
+        var q = await Query("get_history", new { aggregateType = "Note", aggregateId = id, newestFirst = true, beforeId = newest });
+
+        q.ShouldSucceed();
+        q.Body.EnumerateArray().Select(e => e.GetProperty("eventType").GetString()).ShouldBe(["note.edited", "note.created"]);
+    }
+
+    [Fact]
     public async Task Query_NoRows_ReturnsEmpty()
     {
         var q = await Query("get_history", new { aggregateType = "Note", aggregateId = Guid.NewGuid().ToString() });

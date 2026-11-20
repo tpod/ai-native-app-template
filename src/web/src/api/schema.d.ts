@@ -183,7 +183,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Business history of one aggregate, oldest first: each committed event with its action, channel, time, traceId and the caller's optional reason. reason is caller-supplied, not a domain fact. traceId leads to telemetry only while traces are retained. Page with afterId. Possible error codes: history.unknown_aggregate_type, validation.failed. */
+        /** @description Business history of one aggregate, oldest first: each committed event with its action, channel, time, traceId and the caller's optional reason. reason is caller-supplied, not a domain fact. traceId leads to telemetry only while traces are retained. Page with afterId; or pass newestFirst = true for the latest events and page back with beforeId. Possible error codes: history.unknown_aggregate_type, validation.failed. */
         post: operations["get_history"];
         delete?: never;
         options?: never;
@@ -265,8 +265,11 @@ export interface components {
             afterId?: null | number | string;
             aggregateId: string;
             aggregateType: string;
+            /** Format: int64 */
+            beforeId?: null | number | string;
             /** Format: int32 */
             limit?: null | number | string;
+            newestFirst?: null | boolean;
         };
         GetProjectInput: {
             /** Format: uuid */

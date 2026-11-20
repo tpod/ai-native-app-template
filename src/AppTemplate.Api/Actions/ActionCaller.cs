@@ -9,5 +9,16 @@ public sealed record ActionCaller(string Channel, string? Client)
 
     public static ActionCaller InProcess { get; } = new("in_process", null);
 
-    public static ActionCaller Mcp(string? client) => new("mcp", client);
+    /// <summary>
+    /// The client name is client-supplied, so it is trimmed and cut to <see cref="ClientMaxLength"/>: an over-long name
+    /// must never fail the save (providers such as Postgres enforce the column length).
+    /// </summary>
+    public static ActionCaller Mcp(string? client)
+    {
+        var name = client?.Trim();
+        return new("mcp", string.IsNullOrEmpty(name) ? null : name[..Math.Min(name.Length, ClientMaxLength)]);
+    }
+
+    /// <summary>Matches the <c>History.Client</c> column length.</summary>
+    public const int ClientMaxLength = 200;
 }

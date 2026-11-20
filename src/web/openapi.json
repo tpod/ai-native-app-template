@@ -139,6 +139,15 @@
           "aggregateType": {
             "type": "string"
           },
+          "beforeId": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
           "limit": {
             "format": "int32",
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -146,6 +155,12 @@
               "null",
               "integer",
               "string"
+            ]
+          },
+          "newestFirst": {
+            "type": [
+              "null",
+              "boolean"
             ]
           }
         },
@@ -1414,7 +1429,7 @@
     },
     "/api/queries/get_history": {
       "post": {
-        "description": "Business history of one aggregate, oldest first: each committed event with its action, channel, time, traceId and the caller\u0027s optional reason. reason is caller-supplied, not a domain fact. traceId leads to telemetry only while traces are retained. Page with afterId. Possible error codes: history.unknown_aggregate_type, validation.failed.",
+        "description": "Business history of one aggregate, oldest first: each committed event with its action, channel, time, traceId and the caller\u0027s optional reason. reason is caller-supplied, not a domain fact. traceId leads to telemetry only while traces are retained. Page with afterId; or pass newestFirst = true for the latest events and page back with beforeId. Possible error codes: history.unknown_aggregate_type, validation.failed.",
         "operationId": "get_history",
         "requestBody": {
           "content": {

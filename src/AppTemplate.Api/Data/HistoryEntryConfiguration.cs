@@ -16,7 +16,7 @@ internal sealed class HistoryEntryConfiguration : IEntityTypeConfiguration<Histo
         builder.Property(h => h.Payload).IsRequired();
         builder.Property(h => h.Action).IsRequired().HasMaxLength(200);
         builder.Property(h => h.Channel).IsRequired().HasMaxLength(20);
-        builder.Property(h => h.Client).HasMaxLength(200);
+        builder.Property(h => h.Client).HasMaxLength(Actions.ActionCaller.ClientMaxLength);
         builder.Property(h => h.Reason).HasMaxLength(HistoryEntry.ReasonMaxLength);
         builder.Property(h => h.TraceId).HasMaxLength(64);
         builder.HasIndex(h => new { h.AggregateType, h.AggregateId, h.Id });

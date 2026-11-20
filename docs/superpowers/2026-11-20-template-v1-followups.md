@@ -119,4 +119,4 @@ Deferred by the design (`docs/superpowers/specs/2026-11-20-aggregate-history-des
 - **Server-side entity filter.** Child-entity history (a task) is filtered in the browser from the root's history. A `get_history` filter on a payload key would scale better.
 - **Preview `sideEffects[].event`** still shows the CLR type name, not the stable `[Event]` name. Switching is an MCP contract change.
 - **MCP client name.** Recorded from `ClientInfo`, which is null for stateless clients on protocol revisions that send it only in `initialize`.
-- **History UI** was not opened in a browser; the API behind it was exercised end to end. Paging past 200 entries loads newer entries below the first page's newest-first order.
+- **History UI** was not opened in a browser; the API behind it was exercised end to end.

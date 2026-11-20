@@ -8,9 +8,12 @@ namespace AppTemplate.Api.Features.History;
 
 /// <param name="AggregateType">The aggregate's type name, e.g. <c>Project</c>. Case-insensitive.</param>
 /// <param name="AggregateId">The aggregate's id. A GUID in any standard format matches.</param>
-/// <param name="AfterId">Only entries with a larger id: pass the last id of the previous page.</param>
+/// <param name="AfterId">Only entries with a larger id: pass the last id of the previous oldest-first page.</param>
 /// <param name="Limit">Entries per page, 1 to 200; 50 when omitted.</param>
-public sealed record GetHistoryInput(string AggregateType, string AggregateId, long? AfterId = null, int? Limit = null);
+/// <param name="NewestFirst">True for newest first, to read the latest events without paging through all of them.</param>
+/// <param name="BeforeId">Only entries with a smaller id: pass the last id of the previous newest-first page.</param>
+public sealed record GetHistoryInput(
+    string AggregateType, string AggregateId, long? AfterId = null, int? Limit = null, bool? NewestFirst = null, long? BeforeId = null);
 
 /// <param name="Reason">Why the caller says it made the change. Caller-supplied, not a domain fact.</param>
 /// <param name="TraceId">Leads to the execute's trace and logs while telemetry is retained.</param>
@@ -31,7 +34,7 @@ public sealed record HistoryEntryDto(
 
 [Query(
     "get_history",
-    "Business history of one aggregate, oldest first: each committed event with its action, channel, time, traceId and the caller's optional reason. reason is caller-supplied, not a domain fact. traceId leads to telemetry only while traces are retained. Page with afterId.")]
+    "Business history of one aggregate, oldest first: each committed event with its action, channel, time, traceId and the caller's optional reason. reason is caller-supplied, not a domain fact. traceId leads to telemetry only while traces are retained. Page with afterId; or pass newestFirst = true for the latest events and page back with beforeId.")]
 public sealed class GetHistory : IQuery<GetHistoryInput, IReadOnlyList<HistoryEntryDto>>
 {
     public const int DefaultLimit = 50;
@@ -52,10 +55,11 @@ public sealed class GetHistory : IQuery<GetHistoryInput, IReadOnlyList<HistoryEn
         // The change set writes Guid keys as lowercase "D"; accept any format an agent may have copied.
         var id = Guid.TryParse(input.AggregateId, out var guid) ? guid.ToString("D") : input.AggregateId;
         var afterId = input.AfterId ?? 0;
+        var beforeId = input.BeforeId ?? long.MaxValue;
 
-        var rows = await ctx.Db.History.AsNoTracking()
-            .Where(h => h.AggregateType == type && h.AggregateId == id && h.Id > afterId)
-            .OrderBy(h => h.Id)
+        var matching = ctx.Db.History.AsNoTracking()
+            .Where(h => h.AggregateType == type && h.AggregateId == id && h.Id > afterId && h.Id < beforeId);
+        var rows = await (input.NewestFirst == true ? matching.OrderByDescending(h => h.Id) : matching.OrderBy(h => h.Id))
             .Take(input.Limit ?? DefaultLimit)
             .ToListAsync(ctx.CancellationToken);
 
