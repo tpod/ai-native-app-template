@@ -13,7 +13,8 @@ using Microsoft.Extensions.Time.Testing;
 namespace AppTemplate.Api.Tests.Infrastructure;
 
 /// <param name="includeFixtures">Registers the Notes fixture (handlers, validators, event recorder, model contributor). Off for hosts that must see only the real app.</param>
-public sealed class ApiFactory(bool includeFixtures = true) : WebApplicationFactory<Program>, IAsyncDisposable
+/// <param name="webRoot">When set, the host serves static files and the SPA fallback from this directory.</param>
+public sealed class ApiFactory(bool includeFixtures = true, string? webRoot = null) : WebApplicationFactory<Program>, IAsyncDisposable
 {
     public const string SigningKey = "test-signing-key-0123456789abcdef-0123";
 
@@ -31,6 +32,11 @@ public sealed class ApiFactory(bool includeFixtures = true) : WebApplicationFact
     {
         // "Testing" keeps Program's Development-only Migrate from running; this factory owns migration.
         builder.UseEnvironment("Testing");
+        if (webRoot is not null)
+        {
+            builder.UseWebRoot(webRoot);
+        }
+
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Preview:SigningKey"] = SigningKey,

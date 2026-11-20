@@ -21,4 +21,17 @@
     <ProjectReference Include="..\AppTemplate.ServiceDefaults\AppTemplate.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <!-- Publish-only: a normal build or test run never touches npm. -->
+  <Target Name="BuildWeb" BeforeTargets="ComputeFilesToPublish">
+    <Exec Command="npm ci" WorkingDirectory="$(MSBuildProjectDirectory)/../web" />
+    <Exec Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)/../web" />
+    <!-- wwwroot was globbed before the build produced it, so add the fresh output to the publish set here. -->
+    <ItemGroup>
+      <_WebBuildOutput Include="$(MSBuildProjectDirectory)/wwwroot/**" />
+      <ResolvedFileToPublish Include="@(_WebBuildOutput)"
+                             RelativePath="wwwroot/%(RecursiveDir)%(Filename)%(Extension)"
+                             CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
 </Project>
