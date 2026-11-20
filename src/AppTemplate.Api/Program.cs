@@ -31,7 +31,7 @@ if (app.Environment.IsDevelopment())
 app.MapDefaultEndpoints();
 app.MapActions();
 app.MapAppOpenApi();
-app.MapMcp("/mcp");
+app.MapAppMcp("/mcp");
 
 app.MapFallback("/api/{**path}", (HttpContext ctx) => AppErrorProblemDetails.ToResult(new RequestNotFound(ctx.Request.Path.Value ?? "/"), ctx));
 app.MapFallback("/mcp/{**path}", (HttpContext ctx) => AppErrorProblemDetails.ToResult(new RequestNotFound(ctx.Request.Path.Value ?? "/"), ctx));

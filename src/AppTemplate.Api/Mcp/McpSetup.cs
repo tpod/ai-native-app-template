@@ -75,6 +75,25 @@ public static partial class McpSetup
         return services;
     }
 
+    /// <summary>
+    /// Maps the Streamable HTTP endpoint at <paramref name="pattern"/>. The stateless transport serves only POST, and
+    /// <c>MapMcp</c> maps no GET or DELETE then; the spec requires 405 for those (a 404 makes clients treat the server
+    /// as dead), so they answer 405 with <c>Allow: POST</c> and a ProblemDetails body from the status-code pages.
+    /// </summary>
+    public static IEndpointRouteBuilder MapAppMcp(this IEndpointRouteBuilder endpoints, string pattern = "/mcp")
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+
+        endpoints.MapMcp(pattern);
+        endpoints.MapMethods(pattern, [HttpMethods.Get, HttpMethods.Delete], static (HttpContext ctx) =>
+            {
+                ctx.Response.Headers.Allow = HttpMethods.Post;
+                return Results.StatusCode(StatusCodes.Status405MethodNotAllowed);
+            })
+            .ExcludeFromDescription();
+        return endpoints;
+    }
+
     private static ValueTask<ListToolsResult> ListToolsAsync(RequestContext<ListToolsRequestParams> request, CancellationToken ct)
     {
         var services = ServicesOf(request);
