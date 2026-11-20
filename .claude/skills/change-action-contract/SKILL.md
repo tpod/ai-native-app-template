@@ -38,6 +38,10 @@ The OpenAPI snapshot `src/web/openapi.json` shows all of this except the MCP too
 | Change an enum's values | **Breaking** | Add values; never rename or remove one |
 | Make a non-destructive action destructive, or change what a no-op does | **Breaking** in behavior | New action |
 | Change an error code string | **Breaking** | Never. Codes are stable identifiers |
+| Rename an event's `[Event]` name | **Breaking** for history | Never. Stored rows keep the old name forever |
+| Remove, rename or retype a field of an event | **Breaking** for history | Bump the `[Event]` version, so readers can tell old rows from new ones |
+| Add an optional field to an event | Additive | No version bump |
+| Rename an aggregate class | **Breaking** for history | Stored rows keep the old `AggregateType`; avoid it, or migrate the `History` rows in the same change |
 
 ## Add instead of rename
 

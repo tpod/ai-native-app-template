@@ -108,3 +108,15 @@ These are Minor findings from the per-task reviews and the final whole-branch re
 - `remove-example` table wording: it says "two lines" but makes three edits. The placeholder page uses `space-y-2`.
 - The vendored shadcn skill's `allowed-tools` pre-approves `npx shadcn@latest *`, including `apply`, `init --force` and `add --overwrite`. Consider `permissions.ask` entries.
 - The AppHost doesn't print the web resource URL on the console; it only shows in the dashboard.
+
+## Aggregate history (`feat/aggregate-history`)
+
+Deferred by the design (`docs/superpowers/specs/2026-11-20-aggregate-history-design.md`):
+
+- **PII erasure.** History is append-only and keeps payloads and free-text `reason` forever, even after the aggregate is gone. A product with personal data needs crypto-shredding or payload redaction before production.
+- **Retention.** No pruning; the table grows without bound.
+- **Stable aggregate-type name.** `AggregateType` is the CLR class name, so renaming an aggregate orphans its rows unless they are migrated.
+- **Server-side entity filter.** Child-entity history (a task) is filtered in the browser from the root's history. A `get_history` filter on a payload key would scale better.
+- **Preview `sideEffects[].event`** still shows the CLR type name, not the stable `[Event]` name. Switching is an MCP contract change.
+- **MCP client name.** Recorded from `ClientInfo`, which is null for stateless clients on protocol revisions that send it only in `initialize`.
+- **History UI** was not opened in a browser; the API behind it was exercised end to end. Paging past 200 entries loads newer entries below the first page's newest-first order.

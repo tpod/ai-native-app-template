@@ -39,7 +39,7 @@ One per input value with rules, in `src/AppTemplate.Domain/<Aggregate>/`. A `sea
 - Add a method on the aggregate that returns `OneOf<Success, E1, …>` with only the errors it can produce. Example: `Project.Rename(ProjectName name, ProjectId? currentHolderOfName)` returns `OneOf<Success, ProjectIsArchived, ProjectNameTaken>`.
 - The method takes value objects, never raw input. Data that needs the database (uniqueness, existence of another row) is loaded by the action and passed in as a parameter.
 - A no-op (same value) returns `Success` without changing state or raising an event, so the preview shows empty `changes` and `Version` does not move.
-- Raise a past-tense event (`ProjectRenamed`) with `Raise(...)` when state changes.
+- Raise a past-tense event (`ProjectRenamed`) with `Raise(...)` whenever state changes, and give it `[Event("<aggregate>.<verb>", 1)]`. A state change without an event fails as `internal.unexpected`; the event becomes the history row an agent reads later.
 - Each new error is a `sealed record` deriving from `AppError` with `[Error("area.snake_case", ErrorKind.X, "Title")]`, plus `Message`, `Suggestion` and optional `Details`.
 
 ### 3. Validator
@@ -53,7 +53,7 @@ Add `public sealed class <ActionClass>InputValidator : AbstractValidator<<Action
 
 ### 4. The action or query class
 
-One file per action in `src/AppTemplate.Api/Features/<Aggregate>/`, holding its input record and handler, both `public`.
+One file per action in `src/AppTemplate.Api/Features/<Aggregate>/`, holding its input record and handler, both `public`. A mutation's input must not declare a `reason` property: `reason` is the optional execute field stored in history, and registration fails if an input shadows it.
 
 **Mutation** (shape of `src/AppTemplate.Api/Features/Projects/RenameProject.cs`):
 

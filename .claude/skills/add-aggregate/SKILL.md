@@ -45,6 +45,8 @@ Read the generated `Up`: one `CreateTable` for the root, one per child entity, a
 
 Follow `skill:add-action` for each action. Nothing needs registering: the registry and the validator scan find them.
 
+History is automatic: every committed event of the new aggregate is stored, and `get_history` accepts its CLR type name (`aggregateType: "<Aggregate>"`) at once. Its events need `[Event("<aggregate>.<verb>", 1)]` (`skill:domain-modeling`). Renaming the aggregate class later orphans its stored history, so pick the name with care.
+
 ## 4. The architecture guards turn on
 
 If `skill:remove-example` ran, six architecture tests have been reporting as skipped. They re-enable automatically (`tests/AppTemplate.Architecture.Tests/GuardConditions.cs`): the aggregate guards once the Domain has a concrete `AggregateRoot<>` subclass, the action guards once the Api has an `[Action]` or `[Query]`. Do not edit them. Run `dotnet test --project tests/AppTemplate.Architecture.Tests` and expect 0 skipped. These tests must pass now: entities have no public setters, VOs are sealed, the registry builds, `Version` is a concurrency token, and every action has a covered test class.
@@ -62,7 +64,7 @@ scripts/update-openapi.sh
 cd src/web && npm run gen:api
 ```
 
-Add a page with `skill:frontend-feature`. Then `scripts/verify.sh` must print `VERIFY OK`.
+Add a page with `skill:frontend-feature`, with a `<HistoryButton aggregateType="<Aggregate>" …>` on each entity it shows. Then `scripts/verify.sh` must print `VERIFY OK`.
 
 ## Done when
 

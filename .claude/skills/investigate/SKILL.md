@@ -7,6 +7,8 @@ description: Use when an action, query, request or test fails or behaves unexpec
 
 Work in this order and stop as soon as the cause is clear. Each step narrows the next one. Do not change code until you can name the cause.
 
+**No error, but an aggregate is in an unexpected state?** Start with its history: `get_history` with `aggregateType` (e.g. `Project`) and `aggregateId`. Each row shows which action changed it, when, through which channel, the caller's `reason` and the `traceId`. The rows are durable; the trace behind a `traceId` exists only while telemetry is retained. Then continue at step 2 with that `traceId`. A state change missing from history means it bypassed the pipeline, which `StateChangeTests` should have caught.
+
 ## 1. Read the error `code` (and `details`, `suggestion`)
 
 Every error is ProblemDetails JSON, on HTTP (`application/problem+json`) and on MCP (`isError: true`), with `code`, `details`, `suggestion` and `traceId`. The code tells you which layer failed:

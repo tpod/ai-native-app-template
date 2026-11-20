@@ -100,10 +100,19 @@ public sealed record ProjectNameTaken(string Name, ProjectId ExistingProjectId) 
 
 ## Domain events
 
-In `src/AppTemplate.Domain/<Aggregate>/<Aggregate>Events.cs`: past-tense `sealed record`s implementing `IDomainEvent`, carrying primitive ids and values (`ProjectRenamed(Guid ProjectId, string OldName, string NewName)`).
+In `src/AppTemplate.Domain/<Aggregate>/<Aggregate>Events.cs`: past-tense `sealed record`s implementing `IDomainEvent`, carrying primitive ids and values. Each has a stable name and payload version:
 
+```csharp
+[Event("project.renamed", 1)]
+public sealed record ProjectRenamed(Guid ProjectId, string OldName, string NewName) : IDomainEvent;
+```
+
+- **Every method that changes state raises an event.** A preview or execute that changes state without one fails as `internal.unexpected` and commits nothing, because history must be complete.
 - Raise them inside the behavior method, only when state changed.
-- They appear in the preview as `sideEffects`.
+- They appear in the preview as `sideEffects`, and every committed one is stored as a history row (`get_history`).
+- Name events `<aggregate>.<past_tense_verb>`; child-entity events use the root's prefix (`project.task_added`). `EventNameTests` requires `[Event]`, a well-formed name and uniqueness.
+- The name and payload are a history contract: rows keep them forever. Never rename an event's `[Event]` name. When the payload changes incompatibly (a field removed, renamed or retyped), bump the version; adding an optional field does not need a bump.
+- Carry the ids a reader needs to filter on, such as `TaskId` on task events; the UI's history filter matches on them.
 - Handlers implement `IDomainEventHandler<TEvent>` (`src/AppTemplate.Api/Actions/Events/IDomainEventHandler.cs`) in the Api. Register one per concrete event type in `src/AppTemplate.Api/Program.cs`, for example `builder.Services.AddScoped<IDomainEventHandler<ProjectRenamed>, NotifyOnRename>();`.
 - Handlers run after the commit, in the same scope, best-effort and in-process (no outbox). A handler failure returns 500 but does not undo the change.
 

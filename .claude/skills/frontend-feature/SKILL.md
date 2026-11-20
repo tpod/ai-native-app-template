@@ -63,6 +63,18 @@ const columns: DataTableColumn<Summary>[] = [
 
 Keep `columns` stable: define it at module scope, or in `useMemo` when it needs props (row action buttons). A new array on every render rebuilds the table. Set `enableSorting: false` on action columns.
 
+### Every entity gets a history button
+
+Every page that shows an aggregate or a child entity puts a `<HistoryButton>` (`src/web/src/components/history-button.tsx`) on it: beside a detail page's title, and in a column of each list row. It opens the entity's business history from `get_history` in a side panel.
+
+```tsx
+<HistoryButton aggregateType="Project" aggregateId={project.id} label={project.name} />
+{/* A child entity has no history of its own: pass its root, plus a filter on its id key in the event payloads. */}
+<HistoryButton aggregateType="Project" aggregateId={projectId} filter={{ key: 'taskId', value: task.id }} label={task.title} />
+```
+
+The panel's query key is `['history', aggregateType, aggregateId]` and it fetches only while open, so the invalidate-after-execute rule keeps it fresh.
+
 ## 5. Every mutation goes through `<PreviewConfirmDialog>`
 
 ```tsx
