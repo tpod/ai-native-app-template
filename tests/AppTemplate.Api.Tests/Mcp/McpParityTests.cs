@@ -91,6 +91,57 @@ public sealed class McpParityTests : ApiTestBase
     }
 
     [Fact]
+    public async Task CallTool_EverySuccessfulPhase_ReturnsObjectStructuredContent()
+    {
+        await using var client = await ConnectAsync();
+        var token = await PreviewTokenAsync(client, "fixture_create_note", ("text", "hello"));
+        var execute = await client.CallToolAsync("fixture_create_note", Args(("text", "hello"), ("previewToken", token)), cancellationToken: Ct);
+        var id = Structured(execute).GetProperty("result").GetProperty("id").GetString()!;
+
+        var results = new[]
+        {
+            execute,
+            await client.CallToolAsync("preview_fixture_edit_note", Args(("noteId", id), ("text", "edited")), cancellationToken: Ct),
+            await client.CallToolAsync("fixture_get_note", Args(("noteId", id)), cancellationToken: Ct),
+            await client.CallToolAsync("fixture_list_notes", Args(), cancellationToken: Ct),
+        };
+
+        results.Length.ShouldBe(4);
+        foreach (var result in results)
+        {
+            result.IsError.ShouldNotBe(true, TextOf(result));
+            Structured(result).ValueKind.ShouldBe(JsonValueKind.Object, TextOf(result));
+            ShouldBeSameJson(TextOf(result), Structured(result));
+        }
+    }
+
+    [Fact]
+    public async Task CallTool_ListQuery_WrapsArrayUnderItems()
+    {
+        await using var client = await ConnectAsync();
+        await CreateNoteAsync(client, "alpha");
+        await CreateNoteAsync(client, "beta");
+
+        var result = await client.CallToolAsync("fixture_list_notes", Args(), cancellationToken: Ct);
+
+        result.IsError.ShouldNotBe(true, TextOf(result));
+        var items = Structured(result).GetProperty("items");
+        items.ValueKind.ShouldBe(JsonValueKind.Array);
+        items.EnumerateArray().Select(n => n.GetProperty("text").GetString()).ShouldBe(["alpha", "beta"]);
+        var tool = (await client.ListToolsAsync(cancellationToken: Ct)).Single(t => t.Name == "fixture_list_notes");
+        tool.Description.ShouldContain("structuredContent.items");
+    }
+
+    [Fact]
+    public async Task Initialize_Server_InstructionsExplainListResultsUnderItems()
+    {
+        await using var client = await ConnectAsync();
+
+        client.ServerInstructions.ShouldNotBeNull();
+        client.ServerInstructions.ShouldContain("\"items\"");
+    }
+
+    [Fact]
     public async Task CallTool_StaleToken_ReturnsIsErrorWithProblemJson()
     {
         await using var client = await ConnectAsync();

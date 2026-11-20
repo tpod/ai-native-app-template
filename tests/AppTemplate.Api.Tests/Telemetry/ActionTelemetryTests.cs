@@ -121,6 +121,7 @@ public sealed class ActionTelemetryTests : ApiTestBase
                 "fixture_edit_note" => new { noteId, text = "edited" },
                 "fixture_lock_note" => new { noteId },
                 "fixture_get_note" => new { noteId },
+                "fixture_list_notes" => new { },
                 "fixture_explode" => new { },
                 _ => throw new InvalidOperationException($"No known-valid input for {action.Name}; add it here."),
             };

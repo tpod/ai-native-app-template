@@ -20,6 +20,10 @@ public static class McpInstructions
 
         Query tools (readOnlyHint) read data and need no preview or confirmation.
 
+        Successful results are always a JSON object in structuredContent (and the same JSON in the text block).
+        A tool that returns a list puts it under "items", for example {"items": [...]}; a tool that returns a
+        single scalar puts it under "value".
+
         Errors come back with isError = true as RFC 9457 ProblemDetails JSON: type, title, status, detail,
         instance, plus code (stable, for example note.not_found or validation.failed), details, suggestion
         (what to do next) and traceId (quote it when reporting a problem). Act on code and suggestion; do not

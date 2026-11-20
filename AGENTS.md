@@ -91,6 +91,8 @@ Skill map:
 
 Every mutation is previewed first. Over MCP: `preview_<name>` → show the user `summary` and `changes` (and `warnings`) → get confirmation → `<name>` with the same input plus `previewToken`. Over HTTP: `POST /api/actions/<name>/preview`, then `POST /api/actions/<name>` with the input fields plus `previewToken`. Queries are `POST /api/queries/<name>` and need no preview.
 
+MCP `structuredContent` is always a JSON object: a list result arrives as `{ "items": [...] }` and a scalar as `{ "value": x }`. HTTP returns the bare value.
+
 - A preview saves nothing. The token binds the input, the loaded aggregate versions and the change set. It lasts 300 s by default (`PreviewLifetimeSeconds` on `[Action]`) and works once.
 - `preview.stale` or `preview.expired` → call the preview again and show the new result. `details.reason` on stale is `version_changed`, `domain_error`, `changes_differ` or `concurrent_write`.
 - `preview.already_executed` (a create whose id already exists) → don't retry; query to confirm.

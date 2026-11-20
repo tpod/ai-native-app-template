@@ -35,6 +35,12 @@ public static partial class McpSetup
     public const string ServerName = "AppTemplate";
     public const string UnknownToolSuggestion = "Call tools/list to see available tools.";
 
+    /// <summary>The <c>structuredContent</c> member that holds a list result.</summary>
+    public const string ItemsProperty = "items";
+
+    /// <summary>The <c>structuredContent</c> member that holds a scalar result.</summary>
+    public const string ValueProperty = "value";
+
     private const string JsonKey = "AppTemplate.Mcp.Json";
 
     private enum Phase { Preview, Execute, Query }
@@ -130,15 +136,27 @@ public static partial class McpSetup
         where T : notnull
         => result.Match<OneOf<object, AppError>>(ok => ok, error => error);
 
+    /// <summary>
+    /// MCP requires <c>structuredContent</c> to be a JSON object, so a non-object result is wrapped: an array as
+    /// <c>{ "items": [...] }</c>, any other value as <c>{ "value": x }</c>. The text block carries the same (wrapped)
+    /// JSON, so both views agree. No <c>outputSchema</c> is declared.
+    /// </summary>
     private static CallToolResult SuccessResult(object response, JsonSerializerOptions json)
     {
-        var element = JsonSerializer.SerializeToElement(response, response.GetType(), json);
+        var element = ObjectShaped(JsonSerializer.SerializeToElement(response, response.GetType(), json), json);
         return new CallToolResult
         {
             StructuredContent = element,
             Content = [new TextContentBlock { Text = element.GetRawText() }],
         };
     }
+
+    private static JsonElement ObjectShaped(JsonElement element, JsonSerializerOptions json) => element.ValueKind switch
+    {
+        JsonValueKind.Object => element,
+        JsonValueKind.Array => JsonSerializer.SerializeToElement(new Dictionary<string, JsonElement> { [ItemsProperty] = element }, json),
+        _ => JsonSerializer.SerializeToElement(new Dictionary<string, JsonElement> { [ValueProperty] = element }, json),
+    };
 
     private static CallToolResult ErrorResult(IAppError error, string tool, string traceId, JsonSerializerOptions json)
     {

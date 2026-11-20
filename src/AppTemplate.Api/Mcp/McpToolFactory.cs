@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Schema;
+using System.Text.Json.Serialization.Metadata;
 using AppTemplate.Api.Actions;
 using ModelContextProtocol.Protocol;
 
@@ -33,17 +34,20 @@ public static class McpToolFactory
             }
             else
             {
-                tools.Add(Create(d, d.Name, InputSchema(d, json, withToken: false), readOnly: true, destructive: null));
+                var note = d.OutputType is { } output && json.GetTypeInfo(output).Kind == JsonTypeInfoKind.Enumerable
+                    ? $" Returns the list under structuredContent.{McpSetup.ItemsProperty}."
+                    : null;
+                tools.Add(Create(d, d.Name, InputSchema(d, json, withToken: false), readOnly: true, destructive: null, note));
             }
         }
 
         return tools;
     }
 
-    private static Tool Create(ActionDescriptor d, string name, JsonElement schema, bool readOnly, bool? destructive) => new()
+    private static Tool Create(ActionDescriptor d, string name, JsonElement schema, bool readOnly, bool? destructive, string? note = null) => new()
     {
         Name = name,
-        Description = ToolDescriptions.For(d, name),
+        Description = ToolDescriptions.For(d, name) + note,
         InputSchema = schema,
         Annotations = new ToolAnnotations { ReadOnlyHint = readOnly, DestructiveHint = destructive },
     };
