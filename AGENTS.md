@@ -140,6 +140,7 @@ Debug in this order (`skill:investigate`): error `code` → `traceId` → trace 
 - Call the Api only through the typed client (`src/web/src/api/client.ts`, `src/web/src/api/actions.ts`). Never hand-edit `src/web/src/api/schema.d.ts`; regenerate it with `npm run gen:api`.
 - The `shadcn` MCP server starts at the repo root, where there is no `components.json`. Pass `registries: ["@shadcn"]` to its search and list tools, and run the commands it returns from `src/web`.
 - Procedure: `skill:frontend-feature`.
+- **Refreshing the shadcn skill.** The official shadcn skill (`skill:shadcn`) is vendored in `.claude/skills/shadcn/`, not installed as a plugin, so it does not update by itself. To refresh it, run `npx -y skills add shadcn/ui --skill shadcn --agent claude-code --copy -y` from the repo root. Read the diff before committing; it is third-party content. `skills-lock.json` records the upstream commit. Its `npx shadcn@latest info --json` context command finds no `components.json` at the repo root, so run it from `src/web` when you need the project context.
 
 ## Docs-lookup rule
 
