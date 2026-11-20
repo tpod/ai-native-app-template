@@ -50,6 +50,23 @@ public sealed class McpParityTests : ApiTestBase
     }
 
     [Fact]
+    public async Task ListTools_DefaultedNullableParameter_IsOptionalInSchema()
+    {
+        await using var client = await ConnectAsync();
+        var tools = (await client.ListToolsAsync(cancellationToken: Ct)).ToDictionary(t => t.Name, t => t.ProtocolTool);
+
+        var list = tools["fixture_list_notes"].InputSchema;
+        var get = tools["fixture_get_note"].InputSchema;
+
+        list.GetProperty("properties").TryGetProperty("locked", out _).ShouldBeTrue();
+        Required(list).ShouldNotContain("locked");
+        Required(get).ShouldContain("noteId");
+    }
+
+    private static List<string?> Required(JsonElement schema)
+        => schema.TryGetProperty("required", out var required) ? [.. required.EnumerateArray().Select(e => e.GetString())] : [];
+
+    [Fact]
     public async Task ListTools_Annotations_MatchKindAndDestructive()
     {
         await using var client = await ConnectAsync();

@@ -257,6 +257,11 @@ public sealed partial class ActionPipeline(
             return new RequestMalformed($"The request body must be a JSON object holding the input of '{action.Name}'.", "$");
         }
 
+        if (MissingRequiredField(action.InputType, body) is { } missing)
+        {
+            return new RequestMalformed($"The request body is missing the required field '{missing}' of '{action.Name}'.", $"$.{missing}");
+        }
+
         object? input;
         try
         {
@@ -283,6 +288,26 @@ public sealed partial class ActionPipeline(
         }
 
         return input;
+    }
+
+    /// <summary>
+    /// The JSON name of the first required input field absent from <paramref name="body"/>, or null. Required means
+    /// <c>required</c>/<c>[JsonRequired]</c>, or a constructor parameter without a default value (the serializer
+    /// enforces the same with <c>RespectRequiredConstructorParameters</c>, but reports only <c>$</c> as the path).
+    /// </summary>
+    private string? MissingRequiredField(Type inputType, JsonElement body)
+    {
+        var comparison = Json.PropertyNameCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        foreach (var property in Json.GetTypeInfo(inputType).Properties)
+        {
+            var required = property.IsRequired || property.AssociatedParameter is { HasDefaultValue: false, IsMemberInitializer: false };
+            if (required && !body.EnumerateObject().Any(p => string.Equals(p.Name, property.Name, comparison)))
+            {
+                return property.Name;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>(type, id, Version) of every tracked aggregate root that already exists in the database, sorted.</summary>

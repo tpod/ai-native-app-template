@@ -249,7 +249,7 @@ export interface components {
         };
         JsonNode: unknown;
         ListProjectsInput: {
-            status: null | components["schemas"]["ProjectStatus"];
+            status?: null | components["schemas"]["ProjectStatus"];
         };
         PreviewResponse: {
             action: string;

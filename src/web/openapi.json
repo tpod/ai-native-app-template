@@ -148,9 +148,6 @@
             ]
           }
         },
-        "required": [
-          "status"
-        ],
         "type": "object"
       },
       "PreviewResponse": {

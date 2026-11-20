@@ -65,10 +65,14 @@ public static class ActionServiceCollectionExtensions
         services.TryAddScoped<DomainEventDispatcher>();
 
         // One JSON configuration for request bodies, responses and the input hash.
+        // A missing constructor parameter without a default, or null for a non-nullable one, fails deserialization
+        // (400 request.malformed) instead of binding null or Guid.Empty. Optional input fields need a default value.
         services.ConfigureHttpJsonOptions(o =>
         {
             o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
             o.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower));
+            o.SerializerOptions.RespectRequiredConstructorParameters = true;
+            o.SerializerOptions.RespectNullableAnnotations = true;
         });
 
         return services;

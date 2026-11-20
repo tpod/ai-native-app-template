@@ -216,6 +216,45 @@ public sealed class PipelineTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Preview_MissingRequiredField_Returns400WithFieldPath()
+    {
+        var r = await PostRaw("/api/actions/fixture_edit_note/preview", "{\"noteId\":\"" + Guid.NewGuid() + "\"}");
+
+        r.ShouldFailWith("request.malformed", HttpStatusCode.BadRequest);
+        r.Body.GetProperty("details").GetProperty("path").GetString().ShouldBe("$.text");
+        r.Body.GetProperty("detail").GetString()!.ShouldContain("'text'");
+    }
+
+    [Fact]
+    public async Task Preview_MissingGuidField_Returns400NotEmptyGuid()
+    {
+        var r = await PostRaw("/api/actions/fixture_untracked_edit/preview", "{\"text\":\"x\"}");
+
+        r.ShouldFailWith("request.malformed", HttpStatusCode.BadRequest);
+        r.Body.GetProperty("details").GetProperty("path").GetString().ShouldBe("$.noteId");
+    }
+
+    [Fact]
+    public async Task Preview_NullForNonNullableField_Returns400WithFieldPath()
+    {
+        var r = await PostRaw("/api/actions/fixture_create_note/preview", "{\"text\":null}");
+
+        r.ShouldFailWith("request.malformed", HttpStatusCode.BadRequest);
+        r.Body.GetProperty("details").GetProperty("path").GetString().ShouldBe("$.text");
+    }
+
+    [Fact]
+    public async Task Query_OptionalFieldOmitted_Succeeds()
+    {
+        await CreateNote("hello");
+
+        var q = await Query("fixture_list_notes", new { });
+
+        q.ShouldSucceed();
+        q.Body.GetArrayLength().ShouldBe(1);
+    }
+
+    [Fact]
     public async Task PreviewAndExecute_HandlerThrows_Returns500WithoutExceptionText()
     {
         var p = await Preview("fixture_explode", new { });

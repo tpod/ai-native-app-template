@@ -25,7 +25,7 @@ The OpenAPI snapshot `src/web/openapi.json` shows all of this except the MCP too
 
 | Change | Kind | Do |
 |---|---|---|
-| New optional input field (nullable, or with a default the handler applies) | Additive | Fine. Describe the default in the action description |
+| New optional input field: nullable **with a default** (`ProjectStatus? Status = null`), or any type with a default the handler applies | Additive | Fine. Describe the default in the action description. A nullable parameter without a default is still required: omitting it returns `request.malformed` |
 | New output field | Additive | Fine |
 | New action or query | Additive | `skill:add-action` |
 | Description wording that keeps the meaning | Additive | Fine |

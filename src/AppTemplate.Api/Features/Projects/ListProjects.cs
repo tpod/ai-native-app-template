@@ -5,8 +5,8 @@ using OneOf;
 
 namespace AppTemplate.Api.Features.Projects;
 
-/// <param name="Status">Only projects in this status; null lists every project.</param>
-public sealed record ListProjectsInput(ProjectStatus? Status);
+/// <param name="Status">Only projects in this status; null or omitted lists every project.</param>
+public sealed record ListProjectsInput(ProjectStatus? Status = null);
 
 [Query("list_projects", "List projects ordered by name, optionally filtered by status (active or archived).")]
 public sealed class ListProjects : IQuery<ListProjectsInput, IReadOnlyList<ProjectSummaryDto>>
