@@ -13,9 +13,9 @@ public sealed class PreviewTokenSignerTests
         => new(Options.Create(new PreviewOptions { SigningKey = key }));
 
     private static PreviewTokenPayload SamplePayload() => new(
-        "rename_project",
+        "fixture_edit_note",
         "abc123",
-        [new AggregateVersion("Project", "p1", 3)],
+        [new AggregateVersion("Note", "n1", 3)],
         "def456",
         [Guid.Parse("11111111-1111-1111-1111-111111111111")],
         new DateTimeOffset(2026, 11, 19, 12, 0, 0, TimeSpan.Zero));

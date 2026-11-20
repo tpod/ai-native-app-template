@@ -31,16 +31,6 @@ public sealed class OpenApiSnapshotTests : ApiTestBase
         committed.ShouldBe(live, "OpenAPI drift: run scripts/update-openapi.sh");
     }
 
-    [Fact]
-    public async Task OpenApi_ExecuteOperation_RequiresPreviewToken()
-    {
-        var doc = await OpenApiDocument.Fetch(Client);
-        var operation = doc["paths"]!["/api/actions/rename_project"]!["post"]!;
-        var allOf = operation["requestBody"]!["content"]!["application/json"]!["schema"]!["allOf"]!.AsArray();
-        var tokenSchema = allOf.Single(s => s!["properties"]?["previewToken"] is not null)!;
-        tokenSchema["required"]!.AsArray().Select(n => n!.GetValue<string>()).ShouldContain("previewToken");
-    }
-
     internal static string Normalize(JsonNode node) => Sort(node)!.ToJsonString(Indented) + "\n";
 
     private static JsonNode? Sort(JsonNode? node) => node switch
@@ -114,6 +104,23 @@ public sealed class OpenApiFrameworkErrorTests : ApiTestBase
 /// <summary>Uses the Note fixture actions, which exist only in the test host.</summary>
 public sealed class OpenApiProblemTests : ApiTestBase
 {
+    [Fact]
+    public async Task OpenApi_ExecuteOperations_RequirePreviewToken()
+    {
+        var doc = await OpenApiDocument.Fetch(Client);
+        var executes = doc["paths"]!.AsObject()
+            .Where(p => p.Key.StartsWith("/api/actions/", StringComparison.Ordinal) && !p.Key.EndsWith("/preview", StringComparison.Ordinal))
+            .ToList();
+        executes.ShouldNotBeEmpty();
+
+        foreach (var (route, item) in executes)
+        {
+            var allOf = item!["post"]!["requestBody"]!["content"]!["application/json"]!["schema"]!["allOf"]!.AsArray();
+            var tokenSchema = allOf.Single(s => s!["properties"]?["previewToken"] is not null)!;
+            tokenSchema["required"]!.AsArray().Select(n => n!.GetValue<string>()).ShouldContain("previewToken", route);
+        }
+    }
+
     [Fact]
     public async Task OpenApi_ErrorResponses_UseProblemJson()
     {

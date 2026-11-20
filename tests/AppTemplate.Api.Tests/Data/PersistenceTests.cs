@@ -1,3 +1,4 @@
+using AppTemplate.Api.Actions.Preview;
 using AppTemplate.Api.Tests.Infrastructure;
 using AppTemplate.Domain.Common;
 using AppTemplate.Domain.Projects;
@@ -69,6 +70,32 @@ public sealed class PersistenceTests
         await using var c2 = db.NewContext();
         var lower = ProjectName.Create("alpha").AsT0;
         (await c2.Projects.AnyAsync(p => p.Name == lower, TestContext.Current.CancellationToken)).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ChangeSet_AddedProjectWithTask_ListsAllFieldsIncludingChildProjectId()
+    {
+        using var db = new SqliteTestDatabase();
+        db.Migrate();
+        using var ctx = db.NewContext();
+        var pid = ProjectId.From(Guid.NewGuid());
+        var tid = TaskItemId.From(Guid.NewGuid());
+        var project = NewProject("Alpha", pid);
+        project.AddTask(tid, TaskTitle.Create("T1").AsT0);
+        ctx.Projects.Add(project);
+
+        var changes = ChangeSetReader.Read(ctx.ChangeTracker);
+
+        changes.ShouldAllBe(c => c.Op == "added" && c.Before == null);
+        changes.Select(c => $"{c.Entity}.{c.Field}").ShouldBe(
+            [
+                "Project.id", "Project.name", "Project.status",
+                "TaskItem.done", "TaskItem.id", "TaskItem.projectId", "TaskItem.title",
+            ],
+            ignoreOrder: false);
+        changes.Single(c => c.Field == "projectId").After!.GetValue<string>().ShouldBe(pid.Value.ToString("D"));
+        changes.Single(c => c.Entity == "TaskItem" && c.Field == "id").Id.ShouldBe(tid.Value.ToString("D"));
+        changes.Single(c => c.Field == "done").After!.GetValue<bool>().ShouldBeFalse();
     }
 
     [Fact]

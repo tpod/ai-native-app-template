@@ -1,7 +1,8 @@
 using System.Net;
+using AppTemplate.Api.Actions;
 using AppTemplate.Api.Tests.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using Case = AppTemplate.Api.Tests.Infrastructure.Case;
 
 namespace AppTemplate.Api.Tests.Features.Projects;
 
@@ -22,6 +23,16 @@ public sealed class ArchiveProjectTests : ProjectTestBase
         ResultOf(e).GetProperty("status").GetString().ShouldBe("archived");
         var reused = await CreateProject("Alpha");
         reused.ShouldNotBe(id);
+    }
+
+    [Fact]
+    [Covers("archive_project", Case.HappyPath)]
+    public void Registry_ArchiveProject_IsDestructive()
+    {
+        // Destructive drives the MCP destructiveHint on the archive_project tool.
+        var descriptor = Factory.Services.GetRequiredService<ActionRegistry>().Find("archive_project").ShouldNotBeNull();
+
+        descriptor.Destructive.ShouldBeTrue();
     }
 
     [Fact]

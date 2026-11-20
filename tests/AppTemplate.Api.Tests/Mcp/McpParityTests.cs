@@ -66,7 +66,6 @@ public sealed class McpParityTests : ApiTestBase
         tools["fixture_lock_note"].Annotations!.DestructiveHint.ShouldBe(true);
         tools["fixture_edit_note"].Annotations!.ReadOnlyHint.ShouldBe(false);
         tools["fixture_edit_note"].Annotations!.DestructiveHint.ShouldBe(false);
-        tools["archive_project"].Annotations!.DestructiveHint.ShouldBe(true);
     }
 
     [Fact]

@@ -1,6 +1,5 @@
 using AppTemplate.Api.Tests.Infrastructure;
 using Shouldly;
-using Case = AppTemplate.Api.Tests.Infrastructure.Case;
 
 namespace AppTemplate.Api.Tests.Features.Projects;
 
