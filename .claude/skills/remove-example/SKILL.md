@@ -26,7 +26,8 @@ Run every command from the repo root unless the step says otherwise. Follow the 
 | Feature tests | `tests/AppTemplate.Api.Tests/Features/Projects/` | delete |
 | Domain tests | `tests/AppTemplate.Api.Tests/Domain/ProjectNameTests.cs`, `tests/AppTemplate.Api.Tests/Domain/ProjectTests.cs`, `tests/AppTemplate.Api.Tests/Domain/TaskTitleTests.cs` | delete |
 | Persistence tests | `tests/AppTemplate.Api.Tests/Data/PersistenceTests.cs` | keep only the pending-model check (step 3) |
-| Architecture guards that need an aggregate | `tests/AppTemplate.Architecture.Tests/ArchitectureTests.cs`, `tests/AppTemplate.Architecture.Tests/CoverageTests.cs` | no change; 6 guards skip themselves until an aggregate or action exists (step 4) |
+| Architecture guards that need an aggregate | `tests/AppTemplate.Architecture.Tests/ArchitectureTests.cs`, `tests/AppTemplate.Architecture.Tests/EventNameTests.cs` | no change; 5 guards skip themselves until an aggregate exists (step 4) |
+| Business history (`History` table, `get_history`, `<HistoryButton>`) | `src/AppTemplate.Api/Data/HistoryEntry*.cs`, `src/AppTemplate.Api/Features/History/`, `tests/AppTemplate.Api.Tests/Features/History/`, `src/web/src/components/history-*.tsx` | keep; framework, tested on the Notes fixture |
 | OpenAPI snapshot | `src/web/openapi.json` | regenerate (step 6) |
 | Generated client | `src/web/src/api/schema.d.ts` | regenerate (step 7) |
 | Pages | `src/web/src/pages/projects-page.tsx`, `src/web/src/pages/project-detail-page.tsx` | delete; add a placeholder page (step 8) |
@@ -81,14 +82,14 @@ public sealed class PersistenceTests
 
 ## 4. Nothing to do for the architecture guards
 
-Six guards assert that the collection they check is non-empty, so an empty loop cannot pass vacuously. They skip themselves while there is nothing to check, and they re-enable automatically. Do not edit them. The conditions live in `tests/AppTemplate.Architecture.Tests/GuardConditions.cs` and are plain reflection scans:
+Eight guards assert that the collection they check is non-empty, so an empty loop cannot pass vacuously. They skip themselves while there is nothing to check, and they re-enable automatically. Do not edit them. The conditions live in `tests/AppTemplate.Architecture.Tests/GuardConditions.cs` and are plain reflection scans:
 
 | Guard | Runs when |
 |---|---|
-| `DomainEntities_HaveNoPublicSetters`, `ValueObjects_AreSealedWithoutPublicParameterizedConstructors`, `AggregateRoots_VersionIsConcurrencyToken` | the Domain assembly has a concrete subclass of `AggregateRoot<>` (`DomainHasAggregate`) |
+| `DomainEntities_HaveNoPublicSetters`, `ValueObjects_AreSealedWithoutPublicParameterizedConstructors`, `AggregateRoots_VersionIsConcurrencyToken`, `DomainEvents_AllHaveEventAttribute`, `EventNames_AreUniqueAndWellFormed` | the Domain assembly has a concrete subclass of `AggregateRoot<>` (`DomainHasAggregate`) |
 | `Registry_ApiAssembly_BuildsWithoutViolations`, `EveryAction_HasMatchingTestsClass`, `EveryAction_HasCoversForHappyPathEachErrorAndStale` | the Api assembly has a type marked `[Action]` or `[Query]` (`ApiHasActions`) |
 
-After this skill, all six report as skipped, with "No aggregate in the Domain yet; …" or "No [Action] or [Query] in the Api yet; …". The first aggregate or action you add turns them back on, and they must then pass.
+After this skill, the five aggregate guards report as skipped with "No aggregate in the Domain yet; …". The three action guards keep running and pass, because the framework's `get_history` query stays and is covered by `GetHistoryTests`. The first aggregate you add turns the skipped guards back on, and they must then pass.
 
 ## 5. Re-add the `InitialCreate` migration
 
@@ -99,7 +100,7 @@ dotnet tool run dotnet-ef migrations add InitialCreate -p src/AppTemplate.Api -o
 
 The build must report `0 Warning(s)` and `0 Error(s)`; it also proves steps 2 to 4 compile. Do not skip it: in a fresh clone the projects are not restored yet, and dotnet-ef then fails with `NETSDK1004: Assets file … project.assets.json not found`.
 
-Expected from dotnet-ef: `Build succeeded.` then `Done.`, and three new files in `src/AppTemplate.Api/Data/Migrations/` (`<timestamp>_InitialCreate.cs`, its `.Designer.cs` and `AppDbContextModelSnapshot.cs`). `Up` and `Down` are empty, because the model has no entities yet. That is correct: the first real migration comes with your first aggregate.
+Expected from dotnet-ef: `Build succeeded.` then `Done.`, and three new files in `src/AppTemplate.Api/Data/Migrations/` (`<timestamp>_InitialCreate.cs`, its `.Designer.cs` and `AppDbContextModelSnapshot.cs`). `Up` creates only the `History` table, the one framework entity. That is correct: the first aggregate's tables come with your first aggregate's migration.
 
 ## 6. Regenerate the OpenAPI snapshot
 
@@ -107,7 +108,7 @@ Expected from dotnet-ef: `Build succeeded.` then `Done.`, and three new files in
 scripts/update-openapi.sh
 ```
 
-Expected: the test run passes, and `src/web/openapi.json` now has `"paths": {}`.
+Expected: the test run passes, and the only path left in `src/web/openapi.json` is `/api/queries/get_history`.
 
 ## 7. Regenerate the TypeScript client
 
@@ -115,11 +116,11 @@ Expected: the test run passes, and `src/web/openapi.json` now has `"paths": {}`.
 cd src/web && npm run gen:api
 ```
 
-`src/web/src/api/schema.d.ts` now declares `export type paths = Record<string, never>;`. Run `npm ci` in `src/web` first if its node_modules folder is missing.
+`src/web/src/api/schema.d.ts` now declares only the `get_history` query. Run `npm ci` in `src/web` first if its node_modules folder is missing.
 
 ## 8. Fix the web app
 
-`npm run typecheck` in `src/web` now fails in `src/web/src/main.tsx` (missing pages) and in `src/web/src/components/preview-confirm-dialog.tsx` (the schema has no `PreviewResponse` while there are no actions). Make these changes.
+`npm run typecheck` in `src/web` now fails in `src/web/src/main.tsx` (missing pages) and in `src/web/src/components/preview-confirm-dialog.tsx` (the schema has no `PreviewResponse` while there are no mutations). Make these changes. `history-button.tsx` and `history-panel.tsx` need none: `get_history` is still in the schema.
 
 **8a. Create `home-page.tsx` in `src/web/src/pages/`** (recreate the directory first):
 

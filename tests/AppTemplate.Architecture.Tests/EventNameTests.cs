@@ -12,7 +12,7 @@ public sealed partial class EventNameTests
 {
     private static readonly Assembly Domain = typeof(Entity<>).Assembly;
 
-    [Fact]
+    [Fact(Skip = GuardConditions.NoAggregateReason, SkipType = typeof(GuardConditions), SkipUnless = nameof(GuardConditions.DomainHasAggregate))]
     public void DomainEvents_AllHaveEventAttribute()
     {
         var events = DomainEvents();
@@ -25,7 +25,7 @@ public sealed partial class EventNameTests
         missing.ShouldBeEmpty(string.Join(Environment.NewLine, missing));
     }
 
-    [Fact]
+    [Fact(Skip = GuardConditions.NoAggregateReason, SkipType = typeof(GuardConditions), SkipUnless = nameof(GuardConditions.DomainHasAggregate))]
     public void EventNames_AreUniqueAndWellFormed()
     {
         var events = DomainEvents();

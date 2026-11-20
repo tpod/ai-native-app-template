@@ -100,4 +100,20 @@ public sealed class RenameProjectTests : ProjectTestBase
         StaleReasonOf(e).ShouldBe("version_changed");
         (await GetProject(id)).GetProperty("name").GetString().ShouldBe("Alpha");
     }
+
+    [Fact]
+    [Covers("rename_project", Case.HappyPath)]
+    public async Task PreviewAndExecute_NewName_RecordsRenamedInHistory()
+    {
+        var id = await CreateProject("Alpha");
+
+        (await PreviewAndExecute("rename_project", new { projectId = id, name = "Beta" })).execute.ShouldSucceed();
+
+        var q = await Query("get_history", new { aggregateType = "Project", aggregateId = id.ToString() });
+        q.ShouldSucceed();
+        q.Body.GetArrayLength().ShouldBe(2);
+        q.Body[0].GetProperty("eventType").GetString().ShouldBe("project.created");
+        q.Body[1].GetProperty("eventType").GetString().ShouldBe("project.renamed");
+        q.Body[1].GetProperty("payload").GetProperty("newName").GetString().ShouldBe("Beta");
+    }
 }
