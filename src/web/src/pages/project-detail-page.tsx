@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
-import { runQuery, type QueryInput, type QueryResult } from '@/api/actions'
+import { runQuery, type QueryResult } from '@/api/actions'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { InputActionForm } from '@/components/input-action-form'
 import { PreviewConfirmDialog } from '@/components/preview-confirm-dialog'
@@ -15,7 +15,7 @@ export default function ProjectDetailPage() {
   const { id = '' } = useParams()
   const { data, isPending, error } = useQuery({
     queryKey: ['project', id],
-    queryFn: () => runQuery('get_project', { projectId: id } as QueryInput<'get_project'>),
+    queryFn: () => runQuery('get_project', { projectId: id }),
   })
 
   const columns = useMemo<DataTableColumn<Task>[]>(

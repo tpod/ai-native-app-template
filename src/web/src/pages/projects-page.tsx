@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
-import { runQuery, type QueryInput, type QueryResult } from '@/api/actions'
+import { runQuery, type QueryResult } from '@/api/actions'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { InputActionForm } from '@/components/input-action-form'
 import { ProblemAlert } from '@/components/problem-alert'
@@ -40,7 +40,7 @@ export default function ProjectsPage() {
   const [status, setStatus] = useState<Status>(null)
   const { data, isPending, error } = useQuery({
     queryKey: ['projects', status],
-    queryFn: () => runQuery('list_projects', { status } as QueryInput<'list_projects'>),
+    queryFn: () => runQuery('list_projects', { status }),
   })
 
   return (

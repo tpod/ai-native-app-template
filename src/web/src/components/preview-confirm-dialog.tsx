@@ -79,6 +79,8 @@ export function PreviewConfirmDialog<N extends ActionName & PreviewName>({
   })
 
   const handleOpenChange = (next: boolean) => {
+    // Closing mid-execute would let the late success close a later dialog.
+    if (!next && execute.isPending) return
     setOpen(next)
     if (next) execute.reset()
   }
@@ -107,7 +109,7 @@ export function PreviewConfirmDialog<N extends ActionName & PreviewName>({
 
         {problem && (
           <ProblemAlert problem={problem}>
-            {problem.code === 'preview.stale' && (
+            {(problem.code === 'preview.stale' || problem.code === 'preview.expired') && (
               <Button variant="outline" size="sm" className="mt-2" onClick={repreview}>
                 Re-preview
               </Button>
@@ -167,7 +169,7 @@ export function PreviewConfirmDialog<N extends ActionName & PreviewName>({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="outline" disabled={execute.isPending} onClick={() => setOpen(false)}>
             Cancel
           </Button>
           {!problem && (
