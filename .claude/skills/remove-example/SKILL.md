@@ -31,7 +31,7 @@ Run every command from the repo root unless the step says otherwise. Follow the 
 | Generated client | `src/web/src/api/schema.d.ts` | regenerate (step 7) |
 | Pages | `src/web/src/pages/projects-page.tsx`, `src/web/src/pages/project-detail-page.tsx` | delete; add a placeholder page (step 8) |
 | Routes | `src/web/src/main.tsx` | edit (step 8) |
-| Preview dialog (Projects query keys, generated `PreviewResponse` type) | `src/web/src/components/preview-confirm-dialog.tsx` | edit (step 8) |
+| Preview dialog (generated `PreviewResponse` type) | `src/web/src/components/preview-confirm-dialog.tsx` | edit (step 8) |
 | Docs | `AGENTS.md` | edit two lines (step 9) |
 
 No change is needed in `src/web/src/App.tsx` (the layout has no Projects link; routes live in `main.tsx`), `src/AppTemplate.Api/Program.cs`, `src/AppTemplate.AppHost/AppHost.cs`, or the framework tests (`Actions/`, `Mcp/`, `OpenApi/`, `Telemetry/`, `Http/`), which use the Notes fixture. `tests/AppTemplate.Api.Tests/Http/SpaFallbackTests.cs` and `tests/AppTemplate.Api.Tests/Domain/AppErrorTests.cs` contain the strings `/projects/123` and `project_name.empty` as plain test data; leave them.
@@ -119,7 +119,7 @@ cd src/web && npm run gen:api
 
 ## 8. Fix the web app
 
-`npm run typecheck` in `src/web` now fails in `src/web/src/main.tsx` (missing pages) and in `src/web/src/components/preview-confirm-dialog.tsx` (the schema has no `PreviewResponse` while there are no actions). Make these three changes.
+`npm run typecheck` in `src/web` now fails in `src/web/src/main.tsx` (missing pages) and in `src/web/src/components/preview-confirm-dialog.tsx` (the schema has no `PreviewResponse` while there are no actions). Make these changes.
 
 **8a. Create `home-page.tsx` in `src/web/src/pages/`** (recreate the directory first):
 
@@ -169,21 +169,7 @@ with `<Route index element={<HomePage />} />`, keeping the 12-space indentation.
    }
    ```
 
-3. In the `onSuccess` of `useMutation`, replace the Projects-specific invalidation
-
-   ```tsx
-         await Promise.all([
-           queryClient.invalidateQueries({ queryKey: ['projects'] }),
-           queryClient.invalidateQueries({ queryKey: ['project'] }),
-         ])
-   ```
-
-   with:
-
-   ```tsx
-         // Refresh every list and detail query, but not this dialog's own preview.
-         await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'preview' })
-   ```
+The dialog's query invalidation is already generic (every query except previews), so it needs no change.
 
 Check the web app:
 

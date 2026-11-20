@@ -42,7 +42,7 @@ const { data, isPending, error } = useQuery({
 })
 ```
 
-Key queries by aggregate: `['<aggregates>', filters]` for lists and `['<aggregate>', id]` for detail. After an execute, `PreviewConfirmDialog` invalidates queries in its `onSuccess` (`src/web/src/components/preview-confirm-dialog.tsx`). If that code lists keys explicitly (`['projects']`, `['project']`), add your aggregate's key prefixes there, or your page will show stale data after a change.
+Key queries by aggregate: `['<aggregates>', filters]` for lists and `['<aggregate>', id]` for detail. After a successful execute, `PreviewConfirmDialog` (`src/web/src/components/preview-confirm-dialog.tsx`) invalidates every query except previews, so your page refetches without any change to the dialog.
 
 Render the states in this order: `error` (network), `isPending`, `'problem' in data`, then the data.
 

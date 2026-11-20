@@ -68,10 +68,8 @@ export function PreviewConfirmDialog<N extends ActionName & PreviewName>({
     mutationFn: (token: string) => executeAction(action, input, token),
     onSuccess: async (result) => {
       if ('problem' in result) return
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['projects'] }),
-        queryClient.invalidateQueries({ queryKey: ['project'] }),
-      ])
+      // Any query may show data this action changed, so refetch them all; previews are single-use and never cached.
+      await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'preview' })
       toast.success(`${title} done`)
       setOpen(false)
       onExecuted?.(result.data)
