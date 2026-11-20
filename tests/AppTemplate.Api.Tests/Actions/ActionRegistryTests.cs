@@ -171,6 +171,20 @@ public sealed class ActionRegistryTests
         public Task<OneOf<SampleAgg, SampleNotFound>> Load(SampleInput input, ActionContext ctx) => LoadOk(input.Name, ctx);
     }
 
+    [Query("preview_sample", "Shadows the preview tool of a mutation named sample.")]
+    public sealed class PreviewPrefixedQuery : IQuery<SampleInput, SampleOutput>
+    {
+        public Task<OneOf<SampleOutput, SampleNotFound>> Run(SampleInput input, ActionContext ctx) => RunOk();
+    }
+
+    [Action("preview_sample_do", "Mutation whose name collides with generated preview tools.")]
+    public sealed class PreviewPrefixedMutation : SampleMutationBase
+    {
+        public Task<OneOf<SampleAgg, SampleNotFound>> Load(SampleInput input, ActionContext ctx) => LoadOk(input.Name, ctx);
+
+        public Task<OneOf<Success, SampleLocked>> Apply(SampleAgg target, SampleInput input, ActionContext ctx) => ApplyOk();
+    }
+
     [Query("duplicate", "First.")]
     public sealed class DuplicateA : IQuery<SampleInput, SampleOutput>
     {
@@ -402,6 +416,8 @@ public sealed class ActionRegistryTests
     [InlineData(typeof(OpenGenericHandler<>), "non-generic")]
     [InlineData(typeof(OpenGenericInput<>), "non-generic")]
     [InlineData(typeof(GenericLoad), "Load must not be generic")]
+    [InlineData(typeof(PreviewPrefixedQuery), "must not start with 'preview_'")]
+    [InlineData(typeof(PreviewPrefixedMutation), "must not start with 'preview_'")]
     public void Build_InvalidType_ReportsSingleViolationNamingTypeAndRule(Type type, string rule)
     {
         var ex = Should.Throw<ActionRegistrationException>(() => ActionRegistry.Build([type], _ => false));

@@ -71,7 +71,7 @@ public sealed class RenameProject : IMutation<RenameProjectInput, Project>
 ```
 
 - Every input parameter without a default is required: omitting it, or sending `null` for a non-nullable one, returns `400 request.malformed` with the field path. Give optional fields a default (`ProjectStatus? Status = null`) so the MCP and OpenAPI schemas mark them optional.
-- The name is snake_case (`^[a-z][a-z0-9_]*$`) and unique. The description is written for an agent: what it does, the rules it enforces, and any warning codes.
+- The name is snake_case (`^[a-z][a-z0-9_]*$`), unique, and never starts with `preview_` (reserved for the generated preview tools). The description is written for an agent: what it does, the rules it enforces, and any warning codes.
 - `Load` and `Apply` are convention methods named exactly that. The OneOf error arguments of `Load` plus `Apply` are the action's declared error codes. They appear in the MCP tool description and OpenAPI, and `CoverageTests` requires a `[Covers]` test for each.
 - `Load` finds the tracked aggregate (with `Include` for children) or returns `*NotFound`. A **create** builds the aggregate in `Load` instead, takes its id from `ctx.NewId()` and adds it to `ctx.Db`; `Apply` then returns `new Success()`. See `src/AppTemplate.Api/Features/Projects/CreateProject.cs`.
 - Never use `AsNoTracking()` in `Load`. The change set comes from the change tracker, so the pipeline throws (`internal.unexpected`) when `Load` returns an untracked aggregate rather than silently saving nothing.

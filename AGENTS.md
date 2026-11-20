@@ -38,7 +38,7 @@ tests/
 
 ## Golden rules
 
-1. **Define each action once** with `[Action("snake_name", "description")]` + `IMutation<TInput, TAggregate>`, or `[Query(...)]` + `IQuery<TInput, TOutput>`, in `src/AppTemplate.Api/Features/<Aggregate>/`. The OneOf error arguments of `Load`/`Apply`/`Run` are the declared error codes. Recipe: `skill:add-action`.
+1. **Define each action once** with `[Action("snake_name", "description")]` + `IMutation<TInput, TAggregate>`, or `[Query(...)]` + `IQuery<TInput, TOutput>`, in `src/AppTemplate.Api/Features/<Aggregate>/`. The OneOf error arguments of `Load`/`Apply`/`Run` are the declared error codes. Names never start with `preview_`, which is reserved for the generated preview tools. Recipe: `skill:add-action`.
 2. **OneOf only.** Domain methods and actions return `OneOf<…>`. Never introduce a C# `Result`/`Result<T>` type.
 3. **Value objects own their rules.** Private constructor, `static Create(...)` returning `OneOf<TVo, ValidationError>`. Single-value VOs implement `IValueObject<TSelf, TValue>` and are mapped by convention (`ValueObjectConventions`). See `skill:domain-modeling`.
 4. **Every action gets a `{ActionClass}Tests` class with `[Covers]`** for the happy path, each error code and, for mutations, the stale case. See `skill:tdd`.

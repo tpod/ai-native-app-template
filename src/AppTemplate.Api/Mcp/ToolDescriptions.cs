@@ -5,7 +5,7 @@ namespace AppTemplate.Api.Mcp;
 /// <summary>Agent-facing descriptions of the tools (MCP) and operations (OpenAPI) generated for an action.</summary>
 public static class ToolDescriptions
 {
-    public const string PreviewPrefix = "preview_";
+    public const string PreviewPrefix = ActionRegistry.PreviewPrefix;
 
     /// <summary>
     /// The description of <paramref name="tool"/>, which is <c>preview_{name}</c> or <c>{name}</c> of <paramref name="d"/>:

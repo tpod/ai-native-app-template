@@ -15,6 +15,9 @@ public sealed partial class ActionRegistry
 {
     private const string NameRule = "^[a-z][a-z0-9_]*$";
 
+    /// <summary>Reserved: <c>preview_{name}</c> is the generated MCP preview tool of mutation <c>{name}</c>.</summary>
+    public const string PreviewPrefix = "preview_";
+
     private static readonly HashSet<Type> OneOfDefinitions =
     [
         typeof(OneOf<>), typeof(OneOf<,>), typeof(OneOf<,,>), typeof(OneOf<,,,>), typeof(OneOf<,,,,>),
@@ -79,6 +82,11 @@ public sealed partial class ActionRegistry
             if (!NamePattern().IsMatch(name))
             {
                 Fail($"name '{name}' must match {NameRule}.");
+            }
+
+            if (name.StartsWith(PreviewPrefix, StringComparison.Ordinal))
+            {
+                Fail($"name '{name}' must not start with '{PreviewPrefix}'; that prefix is reserved for the generated preview tools of mutations.");
             }
 
             if (string.IsNullOrWhiteSpace(description))
