@@ -91,10 +91,26 @@ Today `tests/AppTemplate.Api.Tests/Infrastructure/ApiFactory.cs` and `tests/AppT
 Choose A unless Docker is unavailable where tests run. For A:
 
 1. Add `Testcontainers.PostgreSql` (central version) to `tests/AppTemplate.Api.Tests/AppTemplate.Api.Tests.csproj`.
-2. Replace `SqliteTestDatabase` with a Postgres equivalent: one container for the run, a uniquely named database per `ApiFactory`, `Database.Migrate()`, then each `IModelContributor`'s `SchemaSql`. Rewrite `NoteModelContributor.SchemaSql` (`tests/AppTemplate.Api.Tests/Fixtures/Notes/NoteModelContributor.cs`) in Postgres DDL (`uuid`, `text`, `boolean`, `integer`).
+2. Replace `SqliteTestDatabase` (`tests/AppTemplate.Api.Tests/Infrastructure/SqliteTestDatabase.cs`) with a Postgres equivalent that keeps its members, `NewContext(...)` and `Migrate(...)`, so `PersistenceTests`, `ActionRegistryTests` and `ChangeSetTests` keep compiling. It needs one container for the run, a uniquely named database per instance, `Database.Migrate()`, then each `IModelContributor`'s `SchemaSql`. Rewrite `NoteModelContributor.SchemaSql` (`tests/AppTemplate.Api.Tests/Fixtures/Notes/NoteModelContributor.cs`) in Postgres DDL (`uuid`, `text`, `boolean`, `integer`).
 3. In `ApiFactory.ConfigureWebHost`, register `UseNpgsql(<per-test connection string>)` instead of `UseSqlite(_database.Connection)`.
-4. Keep the EF `InMemory` ban; it still applies.
-5. Update the docs that state SQLite: the "Integration tests on Testcontainers Postgres" row of AGENTS.md's overrides table (the template now agrees with the kit), the architecture-map and Commands lines that mention SQLite `appdb`, `.claude/rules/testing.md`, `skill:ef-core` and `skill:tdd`.
+4. Switch the architecture guard off SQLite. `AggregateRoots_VersionIsConcurrencyToken` in `tests/AppTemplate.Architecture.Tests/ArchitectureTests.cs` builds the model with `SqliteConnection` and `UseSqlite`. That project gets SQLite only through the Api, so it stops compiling once step 1 removes `Microsoft.EntityFrameworkCore.Sqlite`. Make it build the model with Npgsql instead; that checks the model production actually uses. Replace
+
+   ```csharp
+           using var connection = new SqliteConnection("DataSource=:memory:");
+           connection.Open();
+           var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+   ```
+
+   with
+
+   ```csharp
+           // Builds the model only; Npgsql opens no connection for that.
+           var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql("Host=localhost;Database=model_only").Options;
+   ```
+
+   Then delete `using Microsoft.Data.Sqlite;` at the top of the file. `UseNpgsql` resolves through the Api's Npgsql reference and `using Microsoft.EntityFrameworkCore;`; confirm the namespace in the installed package before building. Then check: `dotnet test --project tests/AppTemplate.Architecture.Tests` must pass with 0 skipped.
+5. Keep the EF `InMemory` ban; it still applies.
+6. Update the docs that state SQLite: the "Integration tests on Testcontainers Postgres" row of AGENTS.md's overrides table (the template now agrees with the kit), the architecture-map and Commands lines that mention SQLite `appdb`, `.claude/rules/testing.md`, `skill:ef-core` and `skill:tdd`.
 
 ## 7. Verify
 

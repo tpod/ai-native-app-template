@@ -45,15 +45,9 @@ Read the generated `Up`: one `CreateTable` for the root, one per child entity, a
 
 Follow `skill:add-action` for each action. Nothing needs registering: the registry and the validator scan find them.
 
-## 4. Re-enable the guards `skill:remove-example` skipped
+## 4. The architecture guards turn on
 
-If the template's example was removed, six architecture tests are skipped until an aggregate exists. Find them:
-
-```bash
-git grep -n "No aggregate yet" -- tests/AppTemplate.Architecture.Tests
-```
-
-Change each `[Fact(Skip = "No aggregate yet: skill:add-aggregate removes this Skip")]` back to `[Fact]`. They must pass now: they check that entities have no public setters, that VOs are sealed, that the registry builds, that `Version` is a concurrency token, and that every action has a covered test class.
+If `skill:remove-example` ran, six architecture tests have been reporting as skipped. They re-enable automatically (`tests/AppTemplate.Architecture.Tests/GuardConditions.cs`): the aggregate guards once the Domain has a concrete `AggregateRoot<>` subclass, the action guards once the Api has an `[Action]` or `[Query]`. Do not edit them. Run `dotnet test --project tests/AppTemplate.Architecture.Tests` and expect 0 skipped. These tests must pass now: entities have no public setters, VOs are sealed, the registry builds, `Version` is a concurrency token, and every action has a covered test class.
 
 ## 5. Tests: `tests/AppTemplate.Api.Tests/Features/<Aggregates>/`
 

@@ -26,7 +26,7 @@ Run every command from the repo root unless the step says otherwise. Follow the 
 | Feature tests | `tests/AppTemplate.Api.Tests/Features/Projects/` | delete |
 | Domain tests | `tests/AppTemplate.Api.Tests/Domain/ProjectNameTests.cs`, `tests/AppTemplate.Api.Tests/Domain/ProjectTests.cs`, `tests/AppTemplate.Api.Tests/Domain/TaskTitleTests.cs` | delete |
 | Persistence tests | `tests/AppTemplate.Api.Tests/Data/PersistenceTests.cs` | keep only the pending-model check (step 3) |
-| Architecture guards that need an aggregate | `tests/AppTemplate.Architecture.Tests/ArchitectureTests.cs`, `tests/AppTemplate.Architecture.Tests/CoverageTests.cs` | skip 6 tests until your first aggregate (step 4) |
+| Architecture guards that need an aggregate | `tests/AppTemplate.Architecture.Tests/ArchitectureTests.cs`, `tests/AppTemplate.Architecture.Tests/CoverageTests.cs` | no change; 6 guards skip themselves until an aggregate or action exists (step 4) |
 | OpenAPI snapshot | `src/web/openapi.json` | regenerate (step 6) |
 | Generated client | `src/web/src/api/schema.d.ts` | regenerate (step 7) |
 | Pages | `src/web/src/pages/projects-page.tsx`, `src/web/src/pages/project-detail-page.tsx` | delete; add a placeholder page (step 8) |
@@ -79,20 +79,16 @@ public sealed class PersistenceTests
 }
 ```
 
-## 4. Skip the six guards that need an aggregate
+## 4. Nothing to do for the architecture guards
 
-These tests assert that the collection they check is non-empty, so with no aggregate and no action they fail. That is deliberate: an empty loop would pass vacuously. Skip them until `skill:add-aggregate` adds your first aggregate and removes the Skip.
+Six guards assert that the collection they check is non-empty, so an empty loop cannot pass vacuously. They skip themselves while there is nothing to check, and they re-enable automatically. Do not edit them. The conditions live in `tests/AppTemplate.Architecture.Tests/GuardConditions.cs` and are plain reflection scans:
 
-In each method below, replace the `[Fact]` line directly above it with exactly:
+| Guard | Runs when |
+|---|---|
+| `DomainEntities_HaveNoPublicSetters`, `ValueObjects_AreSealedWithoutPublicParameterizedConstructors`, `AggregateRoots_VersionIsConcurrencyToken` | the Domain assembly has a concrete subclass of `AggregateRoot<>` (`DomainHasAggregate`) |
+| `Registry_ApiAssembly_BuildsWithoutViolations`, `EveryAction_HasMatchingTestsClass`, `EveryAction_HasCoversForHappyPathEachErrorAndStale` | the Api assembly has a type marked `[Action]` or `[Query]` (`ApiHasActions`) |
 
-```csharp
-    [Fact(Skip = "No aggregate yet: skill:add-aggregate removes this Skip")]
-```
-
-- `tests/AppTemplate.Architecture.Tests/ArchitectureTests.cs`: `DomainEntities_HaveNoPublicSetters`, `ValueObjects_AreSealedWithoutPublicParameterizedConstructors`, `Registry_ApiAssembly_BuildsWithoutViolations`, `AggregateRoots_VersionIsConcurrencyToken`.
-- `tests/AppTemplate.Architecture.Tests/CoverageTests.cs`: `EveryAction_HasMatchingTestsClass`, `EveryAction_HasCoversForHappyPathEachErrorAndStale`.
-
-Leave every other test in those files as it is.
+After this skill, all six report as skipped, with "No aggregate in the Domain yet; …" or "No [Action] or [Query] in the Api yet; …". The first aggregate or action you add turns them back on, and they must then pass.
 
 ## 5. Re-add the `InitialCreate` migration
 
@@ -213,8 +209,8 @@ The skills in `.claude/skills/` keep the Projects files as their worked examples
 scripts/verify.sh
 ```
 
-It must end with `VERIFY OK`. The `dotnet test` step reports 6 skipped tests (the guards from step 4) and no failures.
+It must end with `VERIFY OK`. The `dotnet test` step reports 6 skipped tests (the self-skipping guards from step 4) and no failures.
 
 Commit, for example: `git add -A && git commit -m "refactor!: remove the Projects example"`.
 
-Next: `skill:add-aggregate` for your first aggregate. It removes the six Skip markers.
+Next: `skill:add-aggregate` for your first aggregate. The six guards re-enable on their own as soon as it exists.
