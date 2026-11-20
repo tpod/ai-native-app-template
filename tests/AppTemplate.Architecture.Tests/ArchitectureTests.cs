@@ -66,10 +66,27 @@ public sealed class ArchitectureTests
     {
         var result = Types.InAssembly(Api)
             .ShouldNot()
-            .HaveDependencyOnAny("FluentValidation.ValidationException", "MediatR", "Mediator", "Microsoft.EntityFrameworkCore.InMemory")
+            .HaveDependencyOnAny("FluentValidation.ValidationException", "MediatR", "Mediator",
+                "Microsoft.EntityFrameworkCore.InMemory", "Microsoft.EntityFrameworkCore.InMemoryDbContextOptionsExtensions")
             .GetResult();
 
         result.IsSuccessful.ShouldBeTrue($"Banned dependencies in: {Names(result.FailingTypes)}");
+    }
+
+    // UseInMemoryDatabase lives in namespace Microsoft.EntityFrameworkCore, so a namespace ban cannot see it.
+    // Refusing the assembly reference covers the API wherever it is called, test projects included.
+    [Fact]
+    public void NoAssembly_ReferencesEfCoreInMemory()
+    {
+        var assemblies = new[] { Domain, Api, typeof(AppTemplate.Api.Tests.Infrastructure.CoversAttribute).Assembly };
+        assemblies.Length.ShouldBe(3);
+
+        var offenders = assemblies
+            .Where(a => a.GetReferencedAssemblies().Any(r => r.Name == "Microsoft.EntityFrameworkCore.InMemory"))
+            .Select(a => a.GetName().Name)
+            .ToList();
+
+        offenders.ShouldBeEmpty($"Use SQLite in-memory, not the EF Core InMemory provider: {string.Join(", ", offenders)}");
     }
 
     [Fact]
@@ -86,7 +103,7 @@ public sealed class ArchitectureTests
         {
             var result = Types.InAssembly(assembly)
                 .ShouldNot()
-                .HaveDependencyOnAny("OneOf.Types.Result")
+                .HaveDependencyOnAny("OneOf.Types.Result", "OneOf.Types.Result`1")
                 .GetResult();
             result.IsSuccessful.ShouldBeTrue($"{assembly.GetName().Name} depends on OneOf.Types.Result: {Names(result.FailingTypes)}");
         }

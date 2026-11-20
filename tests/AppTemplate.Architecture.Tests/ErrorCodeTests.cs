@@ -50,6 +50,6 @@ public sealed partial class ErrorCodeTests
         problems.ShouldBeEmpty(string.Join(Environment.NewLine, problems));
     }
 
-    [GeneratedRegex(@"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")]
+    [GeneratedRegex(@"^[a-z_]+\.[a-z_]+$")]
     private static partial Regex CodePattern();
 }
