@@ -16,13 +16,14 @@ old="App""Template"
 old_lower="app""template"
 
 # 1. Contents: tracked text files only.
-git ls-files -z | xargs -0 grep -Ilsi -e "$old_lower" -- 2>/dev/null \
-  | while IFS= read -r f; do
+# git grep exit 1 means "no match" and is fine; any other failure aborts.
+{ git grep -Ilzi -e "$old_lower" || [ $? -eq 1 ]; } \
+  | while IFS= read -r -d '' f; do
       sed -i -e "s/$old/$new/g" -e "s/$old_lower/$new_lower/g" "$f"
-    done || true
+    done
 
 # 2. Paths: deepest first, via git mv.
-git ls-files | grep -F "$old" \
+{ git ls-files | grep -F "$old" || [ $? -eq 1 ]; } \
   | awk -F/ '{print NF "\t" $0}' | sort -rn | cut -f2- \
   | while IFS= read -r p; do
       [ -e "$p" ] || continue
