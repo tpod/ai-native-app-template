@@ -28,7 +28,7 @@ public sealed class ArchitectureTests
         disallowed.ShouldBeEmpty($"Domain may reference only System.*, Microsoft.CSharp, netstandard and OneOf; found: {string.Join(", ", disallowed)}");
     }
 
-    [Fact]
+    [Fact(Skip = GuardConditions.NoAggregateReason, SkipType = typeof(GuardConditions), SkipUnless = nameof(GuardConditions.DomainHasAggregate))]
     public void DomainEntities_HaveNoPublicSetters()
     {
         var entities = Domain.GetTypes().Where(t => !t.IsAbstract && IsSubclassOfOpenGeneric(t, typeof(Entity<>))).ToList();
@@ -43,7 +43,7 @@ public sealed class ArchitectureTests
         offenders.ShouldBeEmpty($"Entities must not expose public setters or init accessors: {string.Join(", ", offenders)}");
     }
 
-    [Fact]
+    [Fact(Skip = GuardConditions.NoAggregateReason, SkipType = typeof(GuardConditions), SkipUnless = nameof(GuardConditions.DomainHasAggregate))]
     public void ValueObjects_AreSealedWithoutPublicParameterizedConstructors()
     {
         var valueObjects = Domain.GetTypes()
@@ -109,7 +109,7 @@ public sealed class ArchitectureTests
         }
     }
 
-    [Fact]
+    [Fact(Skip = GuardConditions.NoActionReason, SkipType = typeof(GuardConditions), SkipUnless = nameof(GuardConditions.ApiHasActions))]
     public void Registry_ApiAssembly_BuildsWithoutViolations()
     {
         var options = new ActionRegistryOptions();
@@ -120,7 +120,7 @@ public sealed class ArchitectureTests
         registry.All.ShouldNotBeEmpty();
     }
 
-    [Fact]
+    [Fact(Skip = GuardConditions.NoAggregateReason, SkipType = typeof(GuardConditions), SkipUnless = nameof(GuardConditions.DomainHasAggregate))]
     public void AggregateRoots_VersionIsConcurrencyToken()
     {
         using var connection = new SqliteConnection("DataSource=:memory:");

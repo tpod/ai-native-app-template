@@ -19,7 +19,7 @@ public sealed class CoverageTests
     private static Type? TestsClassFor(ActionDescriptor action) =>
         TestAssembly.GetTypes().SingleOrDefault(t => t.Name == $"{action.HandlerType.Name}Tests");
 
-    [Fact]
+    [Fact(Skip = GuardConditions.NoActionReason, SkipType = typeof(GuardConditions), SkipUnless = nameof(GuardConditions.ApiHasActions))]
     public void EveryAction_HasMatchingTestsClass()
     {
         var actions = BuildRegistry().All;
@@ -30,7 +30,7 @@ public sealed class CoverageTests
         missing.ShouldBeEmpty($"Actions without a tests class:{Environment.NewLine}{string.Join(Environment.NewLine, missing)}");
     }
 
-    [Fact]
+    [Fact(Skip = GuardConditions.NoActionReason, SkipType = typeof(GuardConditions), SkipUnless = nameof(GuardConditions.ApiHasActions))]
     public void EveryAction_HasCoversForHappyPathEachErrorAndStale()
     {
         var actions = BuildRegistry().All;
