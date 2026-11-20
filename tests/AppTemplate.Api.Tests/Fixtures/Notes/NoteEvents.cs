@@ -7,3 +7,6 @@ public sealed record NoteCreated(Guid NoteId, string Text) : IDomainEvent;
 
 [Event("note.edited", 1)]
 public sealed record NoteEdited(Guid NoteId, string OldText, string NewText) : IDomainEvent;
+
+[Event("note.locked", 1)]
+public sealed record NoteLockApplied(Guid NoteId) : IDomainEvent;

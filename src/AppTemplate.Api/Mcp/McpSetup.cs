@@ -120,7 +120,8 @@ public static partial class McpSetup
             var result = phase switch
             {
                 Phase.Preview => Widen(await pipeline.PreviewAsync(action, body, ct)),
-                Phase.Execute => Widen(await pipeline.ExecuteAsync(action, body, ct)),
+                // ClientInfo is null under the stateless transport on protocol revisions that send it only in initialize.
+                Phase.Execute => Widen(await pipeline.ExecuteAsync(action, body, ActionCaller.Mcp(request.Server.ClientInfo?.Name), ct)),
                 _ => await pipeline.QueryAsync(action, body, ct),
             };
             return result.Match(ok => SuccessResult(ok, json), error => ErrorResult(error, tool, traceId, json));

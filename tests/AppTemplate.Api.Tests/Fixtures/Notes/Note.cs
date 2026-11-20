@@ -52,6 +52,17 @@ public sealed class Note : AggregateRoot<NoteId>
         }
 
         Locked = true;
+        Raise(new NoteLockApplied(Id.Value));
         return new Success();
+    }
+
+    /// <summary>Deliberately broken: changes state without raising an event (see SilentNoteFixtures).</summary>
+    internal void ReplaceTextSilently(NoteText text) => Text = text;
+
+    /// <summary>Deliberately broken: raises an event that has no [Event] attribute (see SilentNoteFixtures).</summary>
+    internal void ReplaceTextWithUnnamedEvent(NoteText text)
+    {
+        Text = text;
+        Raise(new UnnamedNoteEvent(Id.Value));
     }
 }

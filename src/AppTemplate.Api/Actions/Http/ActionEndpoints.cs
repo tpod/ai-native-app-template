@@ -29,7 +29,7 @@ public static class ActionEndpoints
                     action, previewName, typeof(PreviewResponse));
                 Describe(
                     app.MapPost($"/api/actions/{action.Name}", (HttpContext http, ActionPipeline pipeline, CancellationToken ct)
-                        => Handle(http, ct, body => pipeline.ExecuteAsync(action, body, ct))),
+                        => Handle(http, ct, body => pipeline.ExecuteAsync(action, body, ActionCaller.Http, ct))),
                     action, action.Name, typeof(ExecuteResponse));
             }
             else

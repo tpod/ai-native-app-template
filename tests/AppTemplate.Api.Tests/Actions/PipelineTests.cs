@@ -309,7 +309,7 @@ public sealed class PipelineTests : ApiTestBase
         var preview = await Should.ThrowAsync<InvalidOperationException>(
             () => pipeline.PreviewAsync(action, previewBody, TestContext.Current.CancellationToken));
         var execute = await Should.ThrowAsync<InvalidOperationException>(
-            () => pipeline.ExecuteAsync(action, executeBody, TestContext.Current.CancellationToken));
+            () => pipeline.ExecuteAsync(action, executeBody, ActionCaller.Http, TestContext.Current.CancellationToken));
 
         foreach (var e in new[] { preview, execute })
         {

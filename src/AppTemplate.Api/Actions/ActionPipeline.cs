@@ -91,7 +91,7 @@ public sealed partial class ActionPipeline(
             return (AppError)applied.Value;
         }
 
-        var (changes, sideEffects, _) = ReadChangeSet(db);
+        var (changes, sideEffects, _) = ReadChangeSet(action, db);
         IReadOnlyList<PreviewWarning> warnings = [.. ctx.Warnings];
         var expiresAt = time.GetUtcNow() + action.PreviewLifetime;
         var token = signer.Sign(new PreviewTokenPayload(
@@ -112,18 +112,21 @@ public sealed partial class ActionPipeline(
     /// </summary>
     /// <remarks>
     /// Order: token signature, action and input hash, expiry, Load (replaying allocated ids), already-executed check,
-    /// version check, Apply, change-set hash, save (skipped with the version bump when nothing changed), event dispatch,
-    /// <c>ToResult</c>. Events are dispatched in the execute scope after the commit; a handler exception then surfaces
-    /// as a 500 although the change is already saved (no outbox, by design).
+    /// version check, Apply, change-set hash, version bump (only when something changed), history rows, save (skipped
+    /// when nothing changed and no event was raised), event dispatch, <c>ToResult</c>. History rows commit in the same
+    /// SaveChanges as the aggregate. Events are dispatched in the execute scope after the commit; a handler exception
+    /// then surfaces as a 500 although the change is already saved (no outbox, by design).
     /// </remarks>
-    public Task<OneOf<ExecuteResponse, AppError>> ExecuteAsync(ActionDescriptor action, JsonElement body, CancellationToken ct)
+    /// <param name="caller">The channel and client recorded on the history rows.</param>
+    public Task<OneOf<ExecuteResponse, AppError>> ExecuteAsync(ActionDescriptor action, JsonElement body, ActionCaller caller, CancellationToken ct)
     {
         RequireKind(action, ActionKind.Mutation);
-        return InstrumentAsync(action, "execute", activity => ExecuteCoreAsync(action, body, activity, ct));
+        ArgumentNullException.ThrowIfNull(caller);
+        return InstrumentAsync(action, "execute", activity => ExecuteCoreAsync(action, body, caller, activity, ct));
     }
 
     private async Task<OneOf<ExecuteResponse, AppError>> ExecuteCoreAsync(
-        ActionDescriptor action, JsonElement body, Activity? activity, CancellationToken ct)
+        ActionDescriptor action, JsonElement body, ActionCaller caller, Activity? activity, CancellationToken ct)
     {
         await using var scope = scopes.CreateAsyncScope();
         var services = scope.ServiceProvider;
@@ -190,7 +193,7 @@ public sealed partial class ActionPipeline(
             return Stale(action, StaleReasons.DomainError, CauseOf((AppError)applied.Value));
         }
 
-        var (changes, sideEffects, events) = ReadChangeSet(db);
+        var (changes, sideEffects, events) = ReadChangeSet(action, db);
         if (!string.Equals(ChangeSetHasher.Hash(changes, sideEffects, ctx.Warnings), token.ChangesHash, StringComparison.Ordinal))
         {
             return Stale(action, StaleReasons.ChangesDiffer, cause: null);
@@ -200,6 +203,13 @@ public sealed partial class ActionPipeline(
         if (changes.Count > 0)
         {
             ((IAggregateRoot)target).IncrementVersion();
+        }
+
+        // History rows are added after the change set is read and hashed, so they never appear in a response,
+        // and they commit in the same SaveChanges as the aggregate.
+        if (changes.Count > 0 || events.Count > 0)
+        {
+            db.History.AddRange(HistoryRows(action, events, caller));
             try
             {
                 await db.SaveChangesAsync(ct);
@@ -220,7 +230,7 @@ public sealed partial class ActionPipeline(
             }
         }
 
-        await services.GetRequiredService<DomainEventDispatcher>().DispatchAsync(events, ct);
+        await services.GetRequiredService<DomainEventDispatcher>().DispatchAsync([.. events.Select(r => r.Event)], ct);
 
         return new ExecuteResponse(action.Name, action.ToResult!(handler, target), changes);
     }
@@ -332,21 +342,70 @@ public sealed partial class ActionPipeline(
         return false;
     }
 
-    /// <summary>Pending changes, the raised domain events as side effects, and the events themselves (then cleared).</summary>
-    private (IReadOnlyList<Change> Changes, IReadOnlyList<SideEffect> SideEffects, IReadOnlyList<IDomainEvent> Events) ReadChangeSet(AppDbContext db)
+    /// <summary>
+    /// Pending changes, the raised domain events as side effects, and the events with their owning root (then cleared).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// An event has no <c>[Event]</c>, or the action changed state without raising any event. Both are programming
+    /// errors: history must be a complete record, so the call fails as <c>internal.unexpected</c> and nothing commits.
+    /// </exception>
+    private (IReadOnlyList<Change> Changes, IReadOnlyList<SideEffect> SideEffects, IReadOnlyList<RaisedEvent> Events) ReadChangeSet(
+        ActionDescriptor action, AppDbContext db)
     {
         var changes = ChangeSetReader.Read(db.ChangeTracker);
-        var roots = db.ChangeTracker.Entries<IAggregateRoot>().Select(e => e.Entity).ToList();
-        List<IDomainEvent> events = [.. roots.SelectMany(r => r.DomainEvents)];
+        var roots = db.ChangeTracker.Entries<IAggregateRoot>().ToList();
+        List<RaisedEvent> events = [.. roots.SelectMany(root => root.Entity.DomainEvents.Select(e =>
+            new RaisedEvent(e, root.Entity, root.Metadata.ClrType.Name, ChangeSetReader.KeyOf(root))))];
         foreach (var root in roots)
         {
-            root.ClearDomainEvents();
+            root.Entity.ClearDomainEvents();
+        }
+
+        foreach (var raised in events)
+        {
+            EventNames.Of(raised.Event.GetType());
+        }
+
+        if (changes.Count > 0 && events.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Action '{action.Name}' changed {changes[0].Entity} {changes[0].Id} without raising a domain event. "
+                + "Every method that changes state must raise an event so the change is recorded in history.");
         }
 
         IReadOnlyList<SideEffect> sideEffects =
-            [.. events.Select(e => new SideEffect(e.GetType().Name, JsonSerializer.SerializeToNode(e, e.GetType(), Json)!))];
+            [.. events.Select(r => new SideEffect(r.Event.GetType().Name, JsonSerializer.SerializeToNode(r.Event, r.Event.GetType(), Json)!))];
         return (changes, sideEffects, events);
     }
+
+    /// <summary>One history row per raised event, all sharing the execute's time and execution id.</summary>
+    private IEnumerable<HistoryEntry> HistoryRows(ActionDescriptor action, IReadOnlyList<RaisedEvent> events, ActionCaller caller)
+    {
+        var occurredAt = time.GetUtcNow();
+        var executionId = Guid.CreateVersion7();
+        var traceId = Activity.Current?.TraceId.ToString();
+        foreach (var raised in events)
+        {
+            var name = EventNames.Of(raised.Event.GetType());
+            yield return new HistoryEntry(
+                raised.AggregateType,
+                raised.AggregateId,
+                raised.Root.Version,
+                name.Name,
+                name.Version,
+                JsonSerializer.Serialize(raised.Event, raised.Event.GetType(), Json),
+                occurredAt,
+                executionId,
+                action.Name,
+                caller.Channel,
+                caller.Client,
+                reason: null,
+                traceId);
+        }
+    }
+
+    /// <summary>A domain event together with the tracked root that raised it.</summary>
+    private sealed record RaisedEvent(IDomainEvent Event, IAggregateRoot Root, string AggregateType, string AggregateId);
 
     /// <summary>
     /// Wraps one phase in its span, records metrics once, and logs an <see cref="AppError"/> result once at the boundary.
