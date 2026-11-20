@@ -174,6 +174,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/queries/get_history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Business history of one aggregate, oldest first: each committed event with its action, channel, time, traceId and the caller's optional reason. reason is caller-supplied, not a domain fact. traceId leads to telemetry only while traces are retained. Page with afterId. Possible error codes: history.unknown_aggregate_type, validation.failed. */
+        post: operations["get_history"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/queries/get_project": {
         parameters: {
             query?: never;
@@ -243,10 +260,38 @@ export interface components {
             changes: components["schemas"]["Change"][];
             result: unknown;
         };
+        GetHistoryInput: {
+            /** Format: int64 */
+            afterId?: null | number | string;
+            aggregateId: string;
+            aggregateType: string;
+            /** Format: int32 */
+            limit?: null | number | string;
+        };
         GetProjectInput: {
             /** Format: uuid */
             projectId: string;
         };
+        HistoryEntryDto: {
+            action: string;
+            /** Format: int32 */
+            aggregateVersion: number | string;
+            channel: string;
+            client: null | string;
+            eventType: string;
+            /** Format: int32 */
+            eventVersion: number | string;
+            /** Format: uuid */
+            executionId: string;
+            /** Format: int64 */
+            id: number | string;
+            /** Format: date-time */
+            occurredAt: string;
+            payload: components["schemas"]["JsonElement"];
+            reason: null | string;
+            traceId: null | string;
+        };
+        JsonElement: unknown;
         JsonNode: unknown;
         ListProjectsInput: {
             status?: null | components["schemas"]["ProjectStatus"];
@@ -996,6 +1041,57 @@ export interface operations {
             };
             /** @description Possible codes: project.archived, project.name_taken. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Possible codes: validation.failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Possible codes: internal.unexpected. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GetHistoryInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryEntryDto"][];
+                };
+            };
+            /** @description Possible codes: history.unknown_aggregate_type, request.malformed. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

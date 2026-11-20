@@ -122,6 +122,39 @@
         ],
         "type": "object"
       },
+      "GetHistoryInput": {
+        "properties": {
+          "afterId": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "aggregateId": {
+            "type": "string"
+          },
+          "aggregateType": {
+            "type": "string"
+          },
+          "limit": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "aggregateType",
+          "aggregateId"
+        ],
+        "type": "object"
+      },
       "GetProjectInput": {
         "properties": {
           "projectId": {
@@ -134,6 +167,88 @@
         ],
         "type": "object"
       },
+      "HistoryEntryDto": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "aggregateVersion": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "channel": {
+            "type": "string"
+          },
+          "client": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "eventVersion": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "executionId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonElement"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "traceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "eventType",
+          "eventVersion",
+          "occurredAt",
+          "aggregateVersion",
+          "action",
+          "channel",
+          "client",
+          "reason",
+          "traceId",
+          "executionId",
+          "payload"
+        ],
+        "type": "object"
+      },
+      "JsonElement": {},
       "JsonNode": {},
       "ListProjectsInput": {
         "properties": {
@@ -1270,6 +1385,70 @@
               }
             },
             "description": "Possible codes: project.archived, project.name_taken."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    },
+    "/api/queries/get_history": {
+      "post": {
+        "description": "Business history of one aggregate, oldest first: each committed event with its action, channel, time, traceId and the caller\u0027s optional reason. reason is caller-supplied, not a domain fact. traceId leads to telemetry only while traces are retained. Page with afterId. Possible error codes: history.unknown_aggregate_type, validation.failed.",
+        "operationId": "get_history",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetHistoryInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HistoryEntryDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: history.unknown_aggregate_type, request.malformed."
           },
           "422": {
             "content": {
