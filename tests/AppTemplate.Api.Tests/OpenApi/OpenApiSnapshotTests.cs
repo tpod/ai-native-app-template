@@ -31,7 +31,7 @@ public sealed class OpenApiSnapshotTests : ApiTestBase
         committed.ShouldBe(live, "OpenAPI drift: run scripts/update-openapi.sh");
     }
 
-    [Fact(Skip = "Task 13")]
+    [Fact]
     public async Task OpenApi_ExecuteOperation_RequiresPreviewToken()
     {
         var doc = await OpenApiDocument.Fetch(Client);

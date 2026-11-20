@@ -56,14 +56,17 @@ public sealed class McpParityTests : ApiTestBase
 
         var tools = (await client.ListToolsAsync(cancellationToken: Ct)).ToDictionary(t => t.Name, t => t.ProtocolTool);
 
+        var mutations = Factory.Services.GetRequiredService<ActionRegistry>().All.Count(d => d.Kind == ActionKind.Mutation);
+        mutations.ShouldBeGreaterThan(0);
         var previews = tools.Where(t => t.Key.StartsWith("preview_", StringComparison.Ordinal)).ToList();
-        previews.Count.ShouldBe(4);
+        previews.Count.ShouldBe(mutations);
         previews.ShouldAllBe(t => t.Value.Annotations!.ReadOnlyHint == true);
         tools["fixture_get_note"].Annotations!.ReadOnlyHint.ShouldBe(true);
         tools["fixture_lock_note"].Annotations!.ReadOnlyHint.ShouldBe(false);
         tools["fixture_lock_note"].Annotations!.DestructiveHint.ShouldBe(true);
         tools["fixture_edit_note"].Annotations!.ReadOnlyHint.ShouldBe(false);
         tools["fixture_edit_note"].Annotations!.DestructiveHint.ShouldBe(false);
+        tools["archive_project"].Annotations!.DestructiveHint.ShouldBe(true);
     }
 
     [Fact]

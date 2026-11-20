@@ -1,8 +1,1419 @@
 {
+  "components": {
+    "schemas": {
+      "AddTaskInput": {
+        "properties": {
+          "projectId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectId",
+          "title"
+        ],
+        "type": "object"
+      },
+      "ArchiveProjectInput": {
+        "properties": {
+          "projectId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectId"
+        ],
+        "type": "object"
+      },
+      "Change": {
+        "properties": {
+          "after": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
+          },
+          "before": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
+          },
+          "entity": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity",
+          "id",
+          "op",
+          "field",
+          "before",
+          "after"
+        ],
+        "type": "object"
+      },
+      "CompleteTaskInput": {
+        "properties": {
+          "projectId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "taskId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectId",
+          "taskId"
+        ],
+        "type": "object"
+      },
+      "CreateProjectInput": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "ExecuteResponse": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/Change"
+            },
+            "type": "array"
+          },
+          "result": {}
+        },
+        "required": [
+          "action",
+          "result",
+          "changes"
+        ],
+        "type": "object"
+      },
+      "GetProjectInput": {
+        "properties": {
+          "projectId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectId"
+        ],
+        "type": "object"
+      },
+      "JsonNode": {},
+      "ListProjectsInput": {
+        "properties": {
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProjectStatus"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "PreviewResponse": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/Change"
+            },
+            "type": "array"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "previewToken": {
+            "type": "string"
+          },
+          "sideEffects": {
+            "items": {
+              "$ref": "#/components/schemas/SideEffect"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewWarning"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "action",
+          "summary",
+          "changes",
+          "sideEffects",
+          "warnings",
+          "previewToken",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "PreviewWarning": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ProblemDetails": {
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable error code, for example note.locked.",
+            "type": "string"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "details": {
+            "description": "Error-specific structured data; may be null."
+          },
+          "instance": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "suggestion": {
+            "description": "What the caller can do to fix the problem.",
+            "type": "string"
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "traceId": {
+            "description": "Correlates the response with server logs and traces.",
+            "type": "string"
+          },
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ProjectDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProjectStatus"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/TaskItemDto"
+            },
+            "type": "array"
+          },
+          "version": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "version",
+          "tasks"
+        ],
+        "type": "object"
+      },
+      "ProjectStatus": {
+        "enum": [
+          "active",
+          "archived"
+        ]
+      },
+      "ProjectSummaryDto": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "openTaskCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProjectStatus"
+          },
+          "taskCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "taskCount",
+          "openTaskCount"
+        ],
+        "type": "object"
+      },
+      "RenameProjectInput": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "projectId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectId",
+          "name"
+        ],
+        "type": "object"
+      },
+      "SideEffect": {
+        "properties": {
+          "event": {
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonNode"
+          }
+        },
+        "required": [
+          "event",
+          "payload"
+        ],
+        "type": "object"
+      },
+      "TaskItemDto": {
+        "properties": {
+          "done": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "done"
+        ],
+        "type": "object"
+      }
+    }
+  },
   "info": {
     "title": "AppTemplate.Api | v1",
     "version": "1.0.0"
   },
   "openapi": "3.1.1",
-  "paths": {}
+  "paths": {
+    "/api/actions/add_task": {
+      "post": {
+        "description": "Add an open task to an active project. Possible error codes: project.archived, project.not_found, validation.failed. Requires previewToken from preview_add_task. Show the user the preview summary and changes and get their confirmation before calling this tool.",
+        "operationId": "add_task",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/AddTaskInput"
+                  },
+                  {
+                    "properties": {
+                      "previewToken": {
+                        "description": "Token from the matching preview operation; authorizes this execute.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "previewToken"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecuteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: preview.token_invalid, request.malformed."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.not_found."
+          },
+          "409": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: preview.already_executed, preview.expired, preview.stale, preview.token_mismatch, project.archived."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    },
+    "/api/actions/add_task/preview": {
+      "post": {
+        "description": "Add an open task to an active project. Preview only: saves nothing and returns summary, changes, sideEffects, warnings and the previewToken for add_task. Possible error codes: project.archived, project.not_found, validation.failed.",
+        "operationId": "preview_add_task",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddTaskInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: request.malformed."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.not_found."
+          },
+          "409": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.archived."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    },
+    "/api/actions/archive_project": {
+      "post": {
+        "description": "Archive a project. An archived project is read-only, and its name becomes free for a new project. Possible error codes: project.archived, project.not_found, validation.failed. Requires previewToken from preview_archive_project. Show the user the preview summary and changes and get their confirmation before calling this tool.",
+        "operationId": "archive_project",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ArchiveProjectInput"
+                  },
+                  {
+                    "properties": {
+                      "previewToken": {
+                        "description": "Token from the matching preview operation; authorizes this execute.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "previewToken"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecuteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: preview.token_invalid, request.malformed."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.not_found."
+          },
+          "409": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: preview.already_executed, preview.expired, preview.stale, preview.token_mismatch, project.archived."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    },
+    "/api/actions/archive_project/preview": {
+      "post": {
+        "description": "Archive a project. An archived project is read-only, and its name becomes free for a new project. Preview only: saves nothing and returns summary, changes, sideEffects, warnings and the previewToken for archive_project. Possible error codes: project.archived, project.not_found, validation.failed.",
+        "operationId": "preview_archive_project",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveProjectInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: request.malformed."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.not_found."
+          },
+          "409": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.archived."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    },
+    "/api/actions/complete_task": {
+      "post": {
+        "description": "Mark an open task of an active project as done. Possible error codes: project.archived, project.not_found, task.already_done, task.not_found, validation.failed. Requires previewToken from preview_complete_task. Show the user the preview summary and changes and get their confirmation before calling this tool.",
+        "operationId": "complete_task",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CompleteTaskInput"
+                  },
+                  {
+                    "properties": {
+                      "previewToken": {
+                        "description": "Token from the matching preview operation; authorizes this execute.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "previewToken"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecuteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: preview.token_invalid, request.malformed."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.not_found, task.not_found."
+          },
+          "409": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: preview.already_executed, preview.expired, preview.stale, preview.token_mismatch, project.archived, task.already_done."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    },
+    "/api/actions/complete_task/preview": {
+      "post": {
+        "description": "Mark an open task of an active project as done. Preview only: saves nothing and returns summary, changes, sideEffects, warnings and the previewToken for complete_task. Possible error codes: project.archived, project.not_found, task.already_done, task.not_found, validation.failed.",
+        "operationId": "preview_complete_task",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteTaskInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: request.malformed."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.not_found, task.not_found."
+          },
+          "409": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.archived, task.already_done."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    },
+    "/api/actions/create_project": {
+      "post": {
+        "description": "Create an active project. Names are unique among active projects, ignoring case and surrounding spaces. Possible error codes: project.name_taken, validation.failed. Requires previewToken from preview_create_project. Show the user the preview summary and changes and get their confirmation before calling this tool.",
+        "operationId": "create_project",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateProjectInput"
+                  },
+                  {
+                    "properties": {
+                      "previewToken": {
+                        "description": "Token from the matching preview operation; authorizes this execute.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "previewToken"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecuteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: preview.token_invalid, request.malformed."
+          },
+          "409": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: preview.already_executed, preview.expired, preview.stale, preview.token_mismatch, project.name_taken."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    },
+    "/api/actions/create_project/preview": {
+      "post": {
+        "description": "Create an active project. Names are unique among active projects, ignoring case and surrounding spaces. Preview only: saves nothing and returns summary, changes, sideEffects, warnings and the previewToken for create_project. Possible error codes: project.name_taken, validation.failed.",
+        "operationId": "preview_create_project",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: request.malformed."
+          },
+          "409": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.name_taken."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    },
+    "/api/actions/rename_project": {
+      "post": {
+        "description": "Rename an active project. Names are unique among active projects, ignoring case and surrounding spaces. Warns project.unchanged when the name is the same. Possible error codes: project.archived, project.name_taken, project.not_found, validation.failed. Requires previewToken from preview_rename_project. Show the user the preview summary and changes and get their confirmation before calling this tool.",
+        "operationId": "rename_project",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/RenameProjectInput"
+                  },
+                  {
+                    "properties": {
+                      "previewToken": {
+                        "description": "Token from the matching preview operation; authorizes this execute.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "previewToken"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecuteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: preview.token_invalid, request.malformed."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.not_found."
+          },
+          "409": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: preview.already_executed, preview.expired, preview.stale, preview.token_mismatch, project.archived, project.name_taken."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    },
+    "/api/actions/rename_project/preview": {
+      "post": {
+        "description": "Rename an active project. Names are unique among active projects, ignoring case and surrounding spaces. Warns project.unchanged when the name is the same. Preview only: saves nothing and returns summary, changes, sideEffects, warnings and the previewToken for rename_project. Possible error codes: project.archived, project.name_taken, project.not_found, validation.failed.",
+        "operationId": "preview_rename_project",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameProjectInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: request.malformed."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.not_found."
+          },
+          "409": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.archived, project.name_taken."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    },
+    "/api/queries/get_project": {
+      "post": {
+        "description": "Get one project with its tasks. Possible error codes: project.not_found, validation.failed.",
+        "operationId": "get_project",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetProjectInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDto"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: request.malformed."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: project.not_found."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    },
+    "/api/queries/list_projects": {
+      "post": {
+        "description": "List projects ordered by name, optionally filtered by status (active or archived). Possible error codes: validation.failed.",
+        "operationId": "list_projects",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListProjectsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectSummaryDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: request.malformed."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "AppTemplate.Api"
+    }
+  ]
 }
