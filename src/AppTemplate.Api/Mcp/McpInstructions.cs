@@ -12,7 +12,8 @@ public static class McpInstructions
         2. Confirm: show the user the preview summary and changes (and any warnings) and get their explicit
            confirmation. Never execute without it.
         3. Execute: call {action} with the same input plus previewToken. The token binds the exact input and
-           change set, is valid until expiresAt (300 s by default), and can be used once.
+           change set, is valid until expiresAt (300 s by default), and can be used once. Add an optional
+           reason (one or two sentences on why); it is stored in the aggregate's history for the next agent.
 
         If execute returns preview.stale, the data changed since the preview: call preview_{action} again and
         show the user the new preview. On preview.expired, preview again. On preview.already_executed, do not

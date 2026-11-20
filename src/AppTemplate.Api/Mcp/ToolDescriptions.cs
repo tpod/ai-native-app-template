@@ -33,7 +33,7 @@ public static class ToolDescriptions
 
         if (isExecute)
         {
-            parts.Add($"Requires previewToken from preview_{d.Name}. Show the user the preview summary and changes and get their confirmation before calling this tool.");
+            parts.Add($"Requires previewToken from preview_{d.Name}. Show the user the preview summary and changes and get their confirmation before calling this tool. Pass an optional reason saying why; it is stored in history.");
         }
 
         return string.Join(" ", parts);

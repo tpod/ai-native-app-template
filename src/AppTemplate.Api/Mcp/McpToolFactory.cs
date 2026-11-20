@@ -12,10 +12,15 @@ public static class McpToolFactory
 {
     public const string PreviewTokenProperty = "previewToken";
 
+    private const int HistoryReasonMaxLength = Data.HistoryEntry.ReasonMaxLength;
+
+    public const string ReasonDescription =
+        "Optional. One or two sentences on why you are making this change. Stored in this aggregate's history, where the next agent will read it.";
+
     /// <summary>
     /// Mutations yield <c>preview_{name}</c> (read-only) and <c>{name}</c> (not read-only, destructive when flagged);
     /// queries yield <c>{name}</c> (read-only). Input schemas come from <see cref="JsonSchemaExporter"/>; execute
-    /// tools add a required string <c>previewToken</c>.
+    /// tools add a required string <c>previewToken</c> and an optional string <c>reason</c>.
     /// </summary>
     /// <param name="json">Serializer options with a <see cref="JsonSerializerOptions.TypeInfoResolver"/>.</param>
     public static IReadOnlyList<Tool> Build(ActionRegistry registry, JsonSerializerOptions json)
@@ -72,6 +77,13 @@ public static class McpToolFactory
             {
                 ["type"] = "string",
                 ["description"] = $"The previewToken returned by preview_{d.Name} for this exact input.",
+            };
+
+            properties[ActionPipeline.ReasonProperty] = new JsonObject
+            {
+                ["type"] = "string",
+                ["maxLength"] = HistoryReasonMaxLength,
+                ["description"] = ReasonDescription,
             };
 
             if (schema["required"] is not JsonArray required)

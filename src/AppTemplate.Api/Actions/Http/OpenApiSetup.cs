@@ -1,3 +1,4 @@
+using AppTemplate.Api.Data;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
@@ -60,6 +61,12 @@ public static class OpenApiSetup
                         {
                             Type = JsonSchemaType.String,
                             Description = "Token from the matching preview operation; authorizes this execute.",
+                        },
+                        [ActionPipeline.ReasonProperty] = new OpenApiSchema
+                        {
+                            Type = JsonSchemaType.String,
+                            MaxLength = HistoryEntry.ReasonMaxLength,
+                            Description = "Optional reason for this change, stored in the aggregate's history. At most 500 characters.",
                         },
                     },
                     Required = new HashSet<string> { "previewToken" },

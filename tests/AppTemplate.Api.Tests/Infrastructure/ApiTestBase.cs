@@ -44,6 +44,15 @@ public abstract class ApiTestBase : IAsyncLifetime
         return Post($"/api/actions/{action}", body);
     }
 
+    /// <summary>POST /api/actions/{action} with the input fields, <c>previewToken</c> and an optional <c>reason</c>.</summary>
+    protected Task<ApiResponse> Execute(string action, object input, string token, string? reason)
+    {
+        var body = ToObject(input);
+        body["previewToken"] = token;
+        body["reason"] = reason;
+        return Post($"/api/actions/{action}", body);
+    }
+
     /// <summary>Previews, then executes with the returned token. Execute is skipped (and returns the preview) when the preview fails.</summary>
     protected async Task<(ApiResponse preview, ApiResponse execute)> PreviewAndExecute(string action, object input)
     {

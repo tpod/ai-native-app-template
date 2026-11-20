@@ -141,6 +141,10 @@ public sealed partial class ActionRegistry
 
         var (input, aggregate) = (contract.GenericTypeArguments[0], contract.GenericTypeArguments[1]);
         RequireRecord(input, fail);
+        if (input.GetProperties().Any(p => string.Equals(p.Name, ActionPipeline.ReasonProperty, StringComparison.OrdinalIgnoreCase)))
+        {
+            fail($"input {input.Name} must not declare a '{ActionPipeline.ReasonProperty}' property; '{ActionPipeline.ReasonProperty}' is reserved for the optional execute field stored in history.");
+        }
 
         var load = ConventionMethod(type, "Load", [input, typeof(ActionContext)], aggregate, fail);
         var apply = ConventionMethod(type, "Apply", [aggregate, input, typeof(ActionContext)], typeof(Success), fail);

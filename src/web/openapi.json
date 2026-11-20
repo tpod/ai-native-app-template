@@ -404,7 +404,7 @@
   "paths": {
     "/api/actions/add_task": {
       "post": {
-        "description": "Add an open task to an active project. Possible error codes: project.archived, project.not_found, validation.failed. Requires previewToken from preview_add_task. Show the user the preview summary and changes and get their confirmation before calling this tool.",
+        "description": "Add an open task to an active project. Possible error codes: project.archived, project.not_found, validation.failed. Requires previewToken from preview_add_task. Show the user the preview summary and changes and get their confirmation before calling this tool. Pass an optional reason saying why; it is stored in history.",
         "operationId": "add_task",
         "requestBody": {
           "content": {
@@ -418,6 +418,11 @@
                     "properties": {
                       "previewToken": {
                         "description": "Token from the matching preview operation; authorizes this execute.",
+                        "type": "string"
+                      },
+                      "reason": {
+                        "description": "Optional reason for this change, stored in the aggregate\u0027s history. At most 500 characters.",
+                        "maxLength": 500,
                         "type": "string"
                       }
                     },
@@ -582,7 +587,7 @@
     },
     "/api/actions/archive_project": {
       "post": {
-        "description": "Archive a project. An archived project is read-only, and its name becomes free for a new project. Possible error codes: project.archived, project.not_found, validation.failed. Requires previewToken from preview_archive_project. Show the user the preview summary and changes and get their confirmation before calling this tool.",
+        "description": "Archive a project. An archived project is read-only, and its name becomes free for a new project. Possible error codes: project.archived, project.not_found, validation.failed. Requires previewToken from preview_archive_project. Show the user the preview summary and changes and get their confirmation before calling this tool. Pass an optional reason saying why; it is stored in history.",
         "operationId": "archive_project",
         "requestBody": {
           "content": {
@@ -596,6 +601,11 @@
                     "properties": {
                       "previewToken": {
                         "description": "Token from the matching preview operation; authorizes this execute.",
+                        "type": "string"
+                      },
+                      "reason": {
+                        "description": "Optional reason for this change, stored in the aggregate\u0027s history. At most 500 characters.",
+                        "maxLength": 500,
                         "type": "string"
                       }
                     },
@@ -760,7 +770,7 @@
     },
     "/api/actions/complete_task": {
       "post": {
-        "description": "Mark an open task of an active project as done. Possible error codes: project.archived, project.not_found, task.already_done, task.not_found, validation.failed. Requires previewToken from preview_complete_task. Show the user the preview summary and changes and get their confirmation before calling this tool.",
+        "description": "Mark an open task of an active project as done. Possible error codes: project.archived, project.not_found, task.already_done, task.not_found, validation.failed. Requires previewToken from preview_complete_task. Show the user the preview summary and changes and get their confirmation before calling this tool. Pass an optional reason saying why; it is stored in history.",
         "operationId": "complete_task",
         "requestBody": {
           "content": {
@@ -774,6 +784,11 @@
                     "properties": {
                       "previewToken": {
                         "description": "Token from the matching preview operation; authorizes this execute.",
+                        "type": "string"
+                      },
+                      "reason": {
+                        "description": "Optional reason for this change, stored in the aggregate\u0027s history. At most 500 characters.",
+                        "maxLength": 500,
                         "type": "string"
                       }
                     },
@@ -938,7 +953,7 @@
     },
     "/api/actions/create_project": {
       "post": {
-        "description": "Create an active project. Names are unique among active projects, ignoring case and surrounding spaces. Possible error codes: project.name_taken, validation.failed. Requires previewToken from preview_create_project. Show the user the preview summary and changes and get their confirmation before calling this tool.",
+        "description": "Create an active project. Names are unique among active projects, ignoring case and surrounding spaces. Possible error codes: project.name_taken, validation.failed. Requires previewToken from preview_create_project. Show the user the preview summary and changes and get their confirmation before calling this tool. Pass an optional reason saying why; it is stored in history.",
         "operationId": "create_project",
         "requestBody": {
           "content": {
@@ -952,6 +967,11 @@
                     "properties": {
                       "previewToken": {
                         "description": "Token from the matching preview operation; authorizes this execute.",
+                        "type": "string"
+                      },
+                      "reason": {
+                        "description": "Optional reason for this change, stored in the aggregate\u0027s history. At most 500 characters.",
+                        "maxLength": 500,
                         "type": "string"
                       }
                     },
@@ -1096,7 +1116,7 @@
     },
     "/api/actions/rename_project": {
       "post": {
-        "description": "Rename an active project. Names are unique among active projects, ignoring case and surrounding spaces. Warns project.unchanged when the name is the same. Possible error codes: project.archived, project.name_taken, project.not_found, validation.failed. Requires previewToken from preview_rename_project. Show the user the preview summary and changes and get their confirmation before calling this tool.",
+        "description": "Rename an active project. Names are unique among active projects, ignoring case and surrounding spaces. Warns project.unchanged when the name is the same. Possible error codes: project.archived, project.name_taken, project.not_found, validation.failed. Requires previewToken from preview_rename_project. Show the user the preview summary and changes and get their confirmation before calling this tool. Pass an optional reason saying why; it is stored in history.",
         "operationId": "rename_project",
         "requestBody": {
           "content": {
@@ -1110,6 +1130,11 @@
                     "properties": {
                       "previewToken": {
                         "description": "Token from the matching preview operation; authorizes this execute.",
+                        "type": "string"
+                      },
+                      "reason": {
+                        "description": "Optional reason for this change, stored in the aggregate\u0027s history. At most 500 characters.",
+                        "maxLength": 500,
                         "type": "string"
                       }
                     },

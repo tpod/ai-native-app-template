@@ -45,6 +45,9 @@ public sealed partial class ActionPipeline(
         public const string ConcurrentWrite = "concurrent_write";
     }
 
+    /// <summary>The optional execute envelope field stored on history rows. Reserved: no input record may declare it.</summary>
+    public const string ReasonProperty = "reason";
+
     private JsonSerializerOptions Json => jsonOptions.Value.SerializerOptions;
 
     /// <summary>
@@ -137,6 +140,11 @@ public sealed partial class ActionPipeline(
             return invalid;
         }
 
+        if (ReadReason(body).TryPickT1(out var badReason, out var reason))
+        {
+            return badReason;
+        }
+
         var tokenText = body.TryGetProperty("previewToken", out var tokenElement) && tokenElement.ValueKind == JsonValueKind.String
             ? tokenElement.GetString()
             : null;
@@ -209,7 +217,7 @@ public sealed partial class ActionPipeline(
         // and they commit in the same SaveChanges as the aggregate.
         if (changes.Count > 0 || events.Count > 0)
         {
-            db.History.AddRange(HistoryRows(action, events, caller));
+            db.History.AddRange(HistoryRows(action, events, caller, reason));
             try
             {
                 await db.SaveChangesAsync(ct);
@@ -379,7 +387,7 @@ public sealed partial class ActionPipeline(
     }
 
     /// <summary>One history row per raised event, all sharing the execute's time and execution id.</summary>
-    private IEnumerable<HistoryEntry> HistoryRows(ActionDescriptor action, IReadOnlyList<RaisedEvent> events, ActionCaller caller)
+    private IEnumerable<HistoryEntry> HistoryRows(ActionDescriptor action, IReadOnlyList<RaisedEvent> events, ActionCaller caller, string? reason)
     {
         var occurredAt = time.GetUtcNow();
         var executionId = Guid.CreateVersion7();
@@ -399,9 +407,35 @@ public sealed partial class ActionPipeline(
                 action.Name,
                 caller.Channel,
                 caller.Client,
-                reason: null,
+                reason,
                 traceId);
         }
+    }
+
+    /// <summary>
+    /// The optional <c>reason</c> envelope field: trimmed, with empty, whitespace, JSON null and absent all meaning none.
+    /// Not part of the input or the preview token, so any reason may accompany a confirmed preview.
+    /// </summary>
+    private static OneOf<string?, AppError> ReadReason(JsonElement body)
+    {
+        if (!body.TryGetProperty(ReasonProperty, out var element) || element.ValueKind == JsonValueKind.Null)
+        {
+            return (string?)null;
+        }
+
+        if (element.ValueKind != JsonValueKind.String)
+        {
+            return new RequestMalformed("The optional 'reason' must be a string.", "$.reason");
+        }
+
+        var reason = element.GetString()!.Trim();
+        if (reason.Length > HistoryEntry.ReasonMaxLength)
+        {
+            return new RequestMalformed(
+                $"The 'reason' is {reason.Length} characters; shorten it to at most {HistoryEntry.ReasonMaxLength}.", "$.reason");
+        }
+
+        return reason.Length == 0 ? null : reason;
     }
 
     /// <summary>A domain event together with the tracked root that raised it.</summary>

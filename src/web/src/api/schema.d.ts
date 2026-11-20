@@ -13,7 +13,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Add an open task to an active project. Possible error codes: project.archived, project.not_found, validation.failed. Requires previewToken from preview_add_task. Show the user the preview summary and changes and get their confirmation before calling this tool. */
+        /** @description Add an open task to an active project. Possible error codes: project.archived, project.not_found, validation.failed. Requires previewToken from preview_add_task. Show the user the preview summary and changes and get their confirmation before calling this tool. Pass an optional reason saying why; it is stored in history. */
         post: operations["add_task"];
         delete?: never;
         options?: never;
@@ -47,7 +47,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Archive a project. An archived project is read-only, and its name becomes free for a new project. Possible error codes: project.archived, project.not_found, validation.failed. Requires previewToken from preview_archive_project. Show the user the preview summary and changes and get their confirmation before calling this tool. */
+        /** @description Archive a project. An archived project is read-only, and its name becomes free for a new project. Possible error codes: project.archived, project.not_found, validation.failed. Requires previewToken from preview_archive_project. Show the user the preview summary and changes and get their confirmation before calling this tool. Pass an optional reason saying why; it is stored in history. */
         post: operations["archive_project"];
         delete?: never;
         options?: never;
@@ -81,7 +81,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Mark an open task of an active project as done. Possible error codes: project.archived, project.not_found, task.already_done, task.not_found, validation.failed. Requires previewToken from preview_complete_task. Show the user the preview summary and changes and get their confirmation before calling this tool. */
+        /** @description Mark an open task of an active project as done. Possible error codes: project.archived, project.not_found, task.already_done, task.not_found, validation.failed. Requires previewToken from preview_complete_task. Show the user the preview summary and changes and get their confirmation before calling this tool. Pass an optional reason saying why; it is stored in history. */
         post: operations["complete_task"];
         delete?: never;
         options?: never;
@@ -115,7 +115,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Create an active project. Names are unique among active projects, ignoring case and surrounding spaces. Possible error codes: project.name_taken, validation.failed. Requires previewToken from preview_create_project. Show the user the preview summary and changes and get their confirmation before calling this tool. */
+        /** @description Create an active project. Names are unique among active projects, ignoring case and surrounding spaces. Possible error codes: project.name_taken, validation.failed. Requires previewToken from preview_create_project. Show the user the preview summary and changes and get their confirmation before calling this tool. Pass an optional reason saying why; it is stored in history. */
         post: operations["create_project"];
         delete?: never;
         options?: never;
@@ -149,7 +149,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Rename an active project. Names are unique among active projects, ignoring case and surrounding spaces. Warns project.unchanged when the name is the same. Possible error codes: project.archived, project.name_taken, project.not_found, validation.failed. Requires previewToken from preview_rename_project. Show the user the preview summary and changes and get their confirmation before calling this tool. */
+        /** @description Rename an active project. Names are unique among active projects, ignoring case and surrounding spaces. Warns project.unchanged when the name is the same. Possible error codes: project.archived, project.name_taken, project.not_found, validation.failed. Requires previewToken from preview_rename_project. Show the user the preview summary and changes and get their confirmation before calling this tool. Pass an optional reason saying why; it is stored in history. */
         post: operations["rename_project"];
         delete?: never;
         options?: never;
@@ -338,6 +338,8 @@ export interface operations {
                 "application/json": components["schemas"]["AddTaskInput"] & {
                     /** @description Token from the matching preview operation; authorizes this execute. */
                     previewToken: string;
+                    /** @description Optional reason for this change, stored in the aggregate's history. At most 500 characters. */
+                    reason?: string;
                 };
             };
         };
@@ -479,6 +481,8 @@ export interface operations {
                 "application/json": components["schemas"]["ArchiveProjectInput"] & {
                     /** @description Token from the matching preview operation; authorizes this execute. */
                     previewToken: string;
+                    /** @description Optional reason for this change, stored in the aggregate's history. At most 500 characters. */
+                    reason?: string;
                 };
             };
         };
@@ -620,6 +624,8 @@ export interface operations {
                 "application/json": components["schemas"]["CompleteTaskInput"] & {
                     /** @description Token from the matching preview operation; authorizes this execute. */
                     previewToken: string;
+                    /** @description Optional reason for this change, stored in the aggregate's history. At most 500 characters. */
+                    reason?: string;
                 };
             };
         };
@@ -761,6 +767,8 @@ export interface operations {
                 "application/json": components["schemas"]["CreateProjectInput"] & {
                     /** @description Token from the matching preview operation; authorizes this execute. */
                     previewToken: string;
+                    /** @description Optional reason for this change, stored in the aggregate's history. At most 500 characters. */
+                    reason?: string;
                 };
             };
         };
@@ -884,6 +892,8 @@ export interface operations {
                 "application/json": components["schemas"]["RenameProjectInput"] & {
                     /** @description Token from the matching preview operation; authorizes this execute. */
                     previewToken: string;
+                    /** @description Optional reason for this change, stored in the aggregate's history. At most 500 characters. */
+                    reason?: string;
                 };
             };
         };

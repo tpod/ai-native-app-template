@@ -185,6 +185,20 @@ public sealed class ActionRegistryTests
         public Task<OneOf<Success, SampleLocked>> Apply(SampleAgg target, SampleInput input, ActionContext ctx) => ApplyOk();
     }
 
+    public sealed record ReasonInput(string Name, string Reason);
+
+    [Action("reason_input", "Mutation whose input shadows the reserved reason envelope field.")]
+    public sealed class ReasonInputMutation : IMutation<ReasonInput, SampleAgg>
+    {
+        public Task<OneOf<SampleAgg, SampleNotFound>> Load(ReasonInput input, ActionContext ctx) => LoadOk(input.Name, ctx);
+
+        public Task<OneOf<Success, SampleLocked>> Apply(SampleAgg target, ReasonInput input, ActionContext ctx) => ApplyOk();
+
+        public string Summarize(SampleAgg target, ReasonInput input) => "";
+
+        public object ToResult(SampleAgg target) => "";
+    }
+
     [Query("duplicate", "First.")]
     public sealed class DuplicateA : IQuery<SampleInput, SampleOutput>
     {
@@ -418,6 +432,7 @@ public sealed class ActionRegistryTests
     [InlineData(typeof(GenericLoad), "Load must not be generic")]
     [InlineData(typeof(PreviewPrefixedQuery), "must not start with 'preview_'")]
     [InlineData(typeof(PreviewPrefixedMutation), "must not start with 'preview_'")]
+    [InlineData(typeof(ReasonInputMutation), "'reason' is reserved")]
     public void Build_InvalidType_ReportsSingleViolationNamingTypeAndRule(Type type, string rule)
     {
         var ex = Should.Throw<ActionRegistrationException>(() => ActionRegistry.Build([type], _ => false));
