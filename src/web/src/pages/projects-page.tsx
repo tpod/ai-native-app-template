@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { runQuery, type QueryResult } from '@/api/actions'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { HistoryButton } from '@/components/history-button'
 import { InputActionForm } from '@/components/input-action-form'
 import { ProblemAlert } from '@/components/problem-alert'
 import { Badge } from '@/components/ui/badge'
@@ -28,6 +29,12 @@ const columns: DataTableColumn<Summary>[] = [
   },
   { accessorKey: 'taskCount', header: 'Tasks' },
   { accessorKey: 'openTaskCount', header: 'Open' },
+  {
+    id: 'history',
+    header: '',
+    enableSorting: false,
+    cell: ({ row }) => <HistoryButton aggregateType="Project" aggregateId={row.original.id} label={row.original.name} />,
+  },
 ]
 
 const filters: { label: string; value: Status }[] = [

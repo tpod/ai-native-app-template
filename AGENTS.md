@@ -156,6 +156,7 @@ Debug in this order (`skill:investigate`): error `code` → `traceId` → trace 
 - Add components with `npx shadcn@latest add <component>`, run from `src/web`. Never edit `src/web/src/components/ui/*`; compose on top.
 - Tailwind tokens only. No custom CSS.
 - Lists use `<DataTable>` (`src/web/src/components/data-table.tsx`). Every mutation goes through `<PreviewConfirmDialog>` (`src/web/src/components/preview-confirm-dialog.tsx`); errors render with `<ProblemAlert>`.
+- Every entity a page shows gets a `<HistoryButton>` (`src/web/src/components/history-button.tsx`). A child entity passes its root's type and id plus a `filter` on its own id key, e.g. `{ key: 'taskId', value: task.id }`.
 - Call the Api only through the typed client (`src/web/src/api/client.ts`, `src/web/src/api/actions.ts`). Never hand-edit `src/web/src/api/schema.d.ts`; regenerate it with `npm run gen:api`.
 - The `shadcn` MCP server starts at the repo root, where there is no `components.json`. Pass `registries: ["@shadcn"]` to its search and list tools, and run the commands it returns from `src/web`.
 - Procedure: `skill:frontend-feature`.

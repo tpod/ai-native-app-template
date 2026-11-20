@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
 import { runQuery, type QueryResult } from '@/api/actions'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { HistoryButton } from '@/components/history-button'
 import { InputActionForm } from '@/components/input-action-form'
 import { PreviewConfirmDialog } from '@/components/preview-confirm-dialog'
 import { ProblemAlert } from '@/components/problem-alert'
@@ -30,15 +31,24 @@ export default function ProjectDetailPage() {
         id: 'actions',
         header: '',
         enableSorting: false,
-        cell: ({ row }) =>
-          row.original.done ? null : (
-            <PreviewConfirmDialog
-              action="complete_task"
-              input={{ projectId: id, taskId: row.original.id }}
-              title="Complete task"
-              trigger={<Button size="sm" variant="outline">Complete</Button>}
+        cell: ({ row }) => (
+          <div className="flex items-center justify-end gap-2">
+            <HistoryButton
+              aggregateType="Project"
+              aggregateId={id}
+              filter={{ key: 'taskId', value: row.original.id }}
+              label={row.original.title}
             />
-          ),
+            {!row.original.done && (
+              <PreviewConfirmDialog
+                action="complete_task"
+                input={{ projectId: id, taskId: row.original.id }}
+                title="Complete task"
+                trigger={<Button size="sm" variant="outline">Complete</Button>}
+              />
+            )}
+          </div>
+        ),
       },
     ],
     [id],
@@ -64,6 +74,7 @@ export default function ProjectDetailPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold">{project.name}</h1>
+          <HistoryButton aggregateType="Project" aggregateId={id} label={project.name} />
           <Badge variant={project.status === 'active' ? 'default' : 'secondary'}>{project.status}</Badge>
         </div>
         {project.status === 'active' && (

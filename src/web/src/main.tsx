@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes } from 'react-router'
 import './index.css'
 import App from './App.tsx'
 import { Toaster } from '@/components/ui/sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import ProjectDetailPage from '@/pages/project-detail-page'
 import ProjectsPage from '@/pages/projects-page'
 
@@ -13,6 +14,7 @@ const queryClient = new QueryClient()
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
       <BrowserRouter>
         <Routes>
           <Route element={<App />}>
@@ -21,6 +23,7 @@ createRoot(document.getElementById('root')!).render(
           </Route>
         </Routes>
       </BrowserRouter>
+      </TooltipProvider>
       <Toaster />
     </QueryClientProvider>
   </StrictMode>,
