@@ -80,6 +80,7 @@ public sealed partial class ActionPipeline(
         }
 
         var target = loaded.Value;
+        RequireTracked(action, db, target);
         TagAggregate(activity, db, target);
         var versions = AggregateVersions(db);
         var summary = action.Summarize!(handler, target, input);
@@ -163,6 +164,7 @@ public sealed partial class ActionPipeline(
         var loaded = await action.LoadAsync!(handler, input, ctx);
         if (loaded.Index == 0)
         {
+            RequireTracked(action, db, loaded.Value);
             TagAggregate(activity, db, loaded.Value);
         }
 
@@ -362,6 +364,21 @@ public sealed partial class ActionPipeline(
         {
             activity?.SetTag(ActionTelemetry.TagOutcome, outcome);
             metrics.Record(action.Name, phase, outcome, Stopwatch.GetElapsedTime(started));
+        }
+    }
+
+    /// <summary>
+    /// The change set is read from the change tracker, so an untracked aggregate (loaded with <c>AsNoTracking</c>)
+    /// would preview no changes and execute as a silent no-op. Fail loudly instead: the exception surfaces as
+    /// <c>internal.unexpected</c> and is logged with the handler type.
+    /// </summary>
+    private static void RequireTracked(ActionDescriptor action, AppDbContext db, object target)
+    {
+        if (db.Entry(target).State == EntityState.Detached)
+        {
+            throw new InvalidOperationException(
+                $"{action.HandlerType.FullName}.Load returned an untracked {target.GetType().Name} for '{action.Name}'. "
+                + "Load must return a tracked aggregate (no AsNoTracking): query it from ctx.Db with tracking, or ctx.Db.Add a new one.");
         }
     }
 

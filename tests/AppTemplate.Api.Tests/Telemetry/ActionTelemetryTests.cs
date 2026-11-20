@@ -111,6 +111,7 @@ public sealed class ActionTelemetryTests : ApiTestBase
         var fixtures = registry.All.Where(a => a.Name.StartsWith("fixture_", StringComparison.Ordinal)).ToList();
         fixtures.Count.ShouldBeGreaterThan(0);
         var noteId = IdFromChanges(await CreateNote("seed"));
+        HashSet<string> throwing = ["fixture_explode", "fixture_untracked_edit"]; // preview throws, so no execute
 
         var checkedSpans = 0;
         foreach (var action in fixtures)
@@ -123,6 +124,7 @@ public sealed class ActionTelemetryTests : ApiTestBase
                 "fixture_get_note" => new { noteId },
                 "fixture_list_notes" => new { },
                 "fixture_explode" => new { },
+                "fixture_untracked_edit" => new { noteId, text = "edited" },
                 _ => throw new InvalidOperationException($"No known-valid input for {action.Name}; add it here."),
             };
 
@@ -135,7 +137,7 @@ public sealed class ActionTelemetryTests : ApiTestBase
             {
                 var p = await Preview(action.Name, input);
                 phases.Add(("preview", p));
-                if (action.Name != "fixture_explode")
+                if (!throwing.Contains(action.Name))
                 {
                     phases.Add(("execute", await Execute(action.Name, input, TokenOf(p))));
                 }
@@ -147,12 +149,12 @@ public sealed class ActionTelemetryTests : ApiTestBase
                 span.GetTagItem("action.name").ShouldBe(action.Name);
                 span.GetTagItem("action.phase").ShouldBe(phase);
                 var outcome = span.GetTagItem("action.outcome").ShouldBeOfType<string>();
-                outcome.ShouldBe(action.Name == "fixture_explode" ? "internal.unexpected" : "success");
+                outcome.ShouldBe(throwing.Contains(action.Name) ? "internal.unexpected" : "success");
                 checkedSpans++;
             }
         }
 
-        checkedSpans.ShouldBe(fixtures.Count + fixtures.Count(a => a.Kind == ActionKind.Mutation && a.Name != "fixture_explode"));
+        checkedSpans.ShouldBe(fixtures.Count + fixtures.Count(a => a.Kind == ActionKind.Mutation && !throwing.Contains(a.Name)));
     }
 
     private async Task<ApiResponse> CreateNote(string text)

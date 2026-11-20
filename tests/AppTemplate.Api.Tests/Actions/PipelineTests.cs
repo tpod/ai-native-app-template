@@ -1,5 +1,7 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
+using AppTemplate.Api.Actions;
 using AppTemplate.Api.Actions.Preview;
 using AppTemplate.Api.Tests.Fixtures.Notes;
 using AppTemplate.Api.Tests.Infrastructure;
@@ -234,6 +236,49 @@ public sealed class PipelineTests : ApiTestBase
 
         e.ShouldFailWith("internal.unexpected", HttpStatusCode.InternalServerError);
         e.Body.GetRawText().ShouldNotContain("boom-secret");
+    }
+
+    [Fact]
+    public async Task Preview_LoadReturnsUntrackedAggregate_Returns500NotSilentNoOp()
+    {
+        var id = await CreateNote("hello");
+
+        var p = await Preview("fixture_untracked_edit", new { noteId = id, text = "edited" });
+
+        p.ShouldFailWith("internal.unexpected", HttpStatusCode.InternalServerError);
+    }
+
+    [Fact]
+    public async Task PreviewAndExecute_LoadReturnsUntrackedAggregate_ThrowsNamingHandler()
+    {
+        var id = await CreateNote("hello");
+        var registry = Factory.Services.GetRequiredService<ActionRegistry>();
+        var pipeline = Factory.Services.GetRequiredService<ActionPipeline>();
+        var action = registry.Find("fixture_untracked_edit")!;
+        var json = Factory.Services.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions;
+        var input = new UntrackedEditNoteInput(Guid.Parse(id), "edited");
+        var token = Factory.Services.GetRequiredService<PreviewTokenSigner>().Sign(new PreviewTokenPayload(
+            "fixture_untracked_edit",
+            InputHasher.Hash(input, typeof(UntrackedEditNoteInput), json),
+            [],
+            "unused",
+            [],
+            Factory.Time.GetUtcNow().AddSeconds(300)));
+        var previewBody = JsonSerializer.SerializeToElement(new { noteId = id, text = "edited" });
+        var executeBody = JsonSerializer.SerializeToElement(new { noteId = id, text = "edited", previewToken = token });
+
+        var preview = await Should.ThrowAsync<InvalidOperationException>(
+            () => pipeline.PreviewAsync(action, previewBody, TestContext.Current.CancellationToken));
+        var execute = await Should.ThrowAsync<InvalidOperationException>(
+            () => pipeline.ExecuteAsync(action, executeBody, TestContext.Current.CancellationToken));
+
+        foreach (var e in new[] { preview, execute })
+        {
+            e.Message.ShouldContain(nameof(UntrackedEditNote));
+            e.Message.ShouldContain("Load must return a tracked aggregate (no AsNoTracking)");
+        }
+
+        (await GetNoteText(id)).ShouldBe("hello");
     }
 
     [Fact]

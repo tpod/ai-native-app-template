@@ -18,7 +18,7 @@ public static class NoteFixture
     public static void Register(IServiceCollection services)
     {
         services.Configure<ActionRegistryOptions>(o =>
-            o.Types.AddRange([typeof(CreateNote), typeof(EditNote), typeof(LockNote), typeof(Explode), typeof(GetNote), typeof(ListNotes)]));
+            o.Types.AddRange([typeof(CreateNote), typeof(EditNote), typeof(LockNote), typeof(Explode), typeof(GetNote), typeof(ListNotes), typeof(UntrackedEditNote)]));
 
         services.AddScoped<IValidator<CreateNoteInput>, CreateNoteInputValidator>();
         services.AddScoped<IValidator<EditNoteInput>, EditNoteInputValidator>();
