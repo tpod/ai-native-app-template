@@ -266,7 +266,7 @@ export interface components {
             message: string;
         };
         ProblemDetails: {
-            /** @description Stable machine-readable error code, for example note.locked. */
+            /** @description Stable machine-readable error code, for example validation.failed or preview.stale. */
             code?: string;
             detail?: null | string;
             /** @description Error-specific structured data; may be null. */

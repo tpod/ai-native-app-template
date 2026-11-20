@@ -213,7 +213,7 @@
       "ProblemDetails": {
         "properties": {
           "code": {
-            "description": "Stable machine-readable error code, for example note.locked.",
+            "description": "Stable machine-readable error code, for example validation.failed or preview.stale.",
             "type": "string"
           },
           "detail": {

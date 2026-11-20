@@ -100,7 +100,7 @@ public static class OpenApiSetup
         }
 
         problem.Properties ??= new Dictionary<string, IOpenApiSchema>();
-        problem.Properties["code"] = new OpenApiSchema { Type = JsonSchemaType.String, Description = "Stable machine-readable error code, for example note.locked." };
+        problem.Properties["code"] = new OpenApiSchema { Type = JsonSchemaType.String, Description = "Stable machine-readable error code, for example validation.failed or preview.stale." };
         problem.Properties["details"] = new OpenApiSchema { Description = "Error-specific structured data; may be null." };
         problem.Properties["suggestion"] = new OpenApiSchema { Type = JsonSchemaType.String, Description = "What the caller can do to fix the problem." };
         problem.Properties["traceId"] = new OpenApiSchema { Type = JsonSchemaType.String, Description = "Correlates the response with server logs and traces." };

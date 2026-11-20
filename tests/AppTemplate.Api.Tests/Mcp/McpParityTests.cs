@@ -192,6 +192,8 @@ public sealed class McpParityTests : ApiTestBase
         client.ServerInstructions.ShouldContain("previewToken");
         client.ServerInstructions.ShouldContain("preview.stale");
         client.ServerInstructions.ShouldContain("traceId");
+        client.ServerInstructions.ShouldContain("expiresAt (300 s by default)");
+        client.ServerInstructions.ShouldNotContain("note.", Shouldly.Case.Sensitive); // fixture codes never reach runtime agents
     }
 
     [Fact]
