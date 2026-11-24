@@ -2,7 +2,9 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
+using AppTemplate.Domain.Common;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace AppTemplate.Api.Actions.Preview;
 
@@ -12,52 +14,85 @@ public static class ChangeSetReader
     private const string VersionProperty = "Version";
 
     public static IReadOnlyList<Change> Read(ChangeTracker tracker)
+        => [.. tracker.Entries().SelectMany(ChangesOf)
+            .OrderBy(c => c.Entity, StringComparer.Ordinal)
+            .ThenBy(c => c.Id, StringComparer.Ordinal)
+            .ThenBy(c => c.Field, StringComparer.Ordinal)];
+
+    /// <summary>The entries that contribute at least one <see cref="Change"/>: the same rule as <see cref="Read"/>.</summary>
+    internal static IReadOnlyList<EntityEntry> ChangedEntries(ChangeTracker tracker)
+        => [.. tracker.Entries().Where(e => ChangesOf(e).Any())];
+
+    /// <summary>
+    /// The tracked aggregate root that owns <paramref name="entry"/>: the entry itself for a root, otherwise the root
+    /// reached by following foreign keys to tracked principals. Null when no tracked root owns it.
+    /// </summary>
+    internal static EntityEntry? RootOf(EntityEntry entry)
     {
-        var changes = new List<Change>();
-        foreach (var entry in tracker.Entries())
+        if (entry.Entity is IAggregateRoot)
         {
-            var op = entry.State switch
+            return entry;
+        }
+
+        var original = entry.State == EntityState.Deleted;
+        foreach (var fk in entry.Metadata.GetForeignKeys())
+        {
+            var key = KeyString(entry, fk.Properties, original);
+            var principal = entry.Context.ChangeTracker.Entries().FirstOrDefault(e =>
+                fk.PrincipalEntityType.ClrType.IsAssignableFrom(e.Metadata.ClrType)
+                && KeyString(e, fk.PrincipalKey.Properties, e.State == EntityState.Deleted) == key);
+            if (principal is not null && RootOf(principal) is { } root)
             {
-                EntityState.Added => "added",
-                EntityState.Modified => "modified",
-                EntityState.Deleted => "deleted",
-                _ => null,
-            };
-            if (op is null)
+                return root;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The entry's primary key as provider values, joined with <c>|</c>; the <c>id</c> used in <see cref="Change"/>.</summary>
+    internal static string KeyOf(EntityEntry entry) => KeyString(entry, entry.Metadata.FindPrimaryKey()!.Properties, original: false);
+
+    private static IEnumerable<Change> ChangesOf(EntityEntry entry)
+    {
+        var op = entry.State switch
+        {
+            EntityState.Added => "added",
+            EntityState.Modified => "modified",
+            EntityState.Deleted => "deleted",
+            _ => null,
+        };
+        if (op is null)
+        {
+            yield break;
+        }
+
+        var entity = entry.Metadata.ClrType.Name;
+        var id = KeyOf(entry);
+        foreach (var (path, property) in Flatten(entry))
+        {
+            if (path == VersionProperty)
             {
                 continue;
             }
 
-            var entity = entry.Metadata.ClrType.Name;
-            var id = KeyOf(entry);
-            foreach (var (path, property) in Flatten(entry))
+            var before = op == "added" ? null : Provider(property.OriginalValue, property);
+            var after = op == "deleted" ? null : Provider(property.CurrentValue, property);
+            if (op == "modified" && (!property.IsModified || Equals(before, after)))
             {
-                if (path == VersionProperty)
-                {
-                    continue;
-                }
-
-                var before = op == "added" ? null : Provider(property.OriginalValue, property);
-                var after = op == "deleted" ? null : Provider(property.CurrentValue, property);
-                if (op == "modified" && (!property.IsModified || Equals(before, after)))
-                {
-                    continue;
-                }
-
-                changes.Add(new Change(entity, id, op, FieldName(path), ToNode(before), ToNode(after)));
+                continue;
             }
-        }
 
-        return [.. changes
-            .OrderBy(c => c.Entity, StringComparer.Ordinal)
-            .ThenBy(c => c.Id, StringComparer.Ordinal)
-            .ThenBy(c => c.Field, StringComparer.Ordinal)];
+            yield return new Change(entity, id, op, FieldName(path), ToNode(before), ToNode(after));
+        }
     }
 
-    /// <summary>The entry's primary key as provider values, joined with <c>|</c>; the <c>id</c> used in <see cref="Change"/>.</summary>
-    internal static string KeyOf(EntityEntry entry)
-        => string.Join('|', entry.Metadata.FindPrimaryKey()!.Properties
-            .Select(p => ProviderString(Provider(entry.Property(p.Name).CurrentValue, entry.Property(p.Name)))));
+    private static string KeyString(EntityEntry entry, IEnumerable<IReadOnlyProperty> properties, bool original)
+        => string.Join('|', properties.Select(p =>
+        {
+            var property = entry.Property(p.Name);
+            return ProviderString(Provider(original ? property.OriginalValue : property.CurrentValue, property));
+        }));
 
     private static IEnumerable<(string Path, PropertyEntry Property)> Flatten(EntityEntry entry)
     {

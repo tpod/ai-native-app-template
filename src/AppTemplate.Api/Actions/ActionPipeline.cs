@@ -9,6 +9,7 @@ using AppTemplate.Domain.Common;
 using FluentValidation;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.Options;
 using OneOf;
 
@@ -94,7 +95,7 @@ public sealed partial class ActionPipeline(
             return (AppError)applied.Value;
         }
 
-        var (changes, sideEffects, _) = ReadChangeSet(action, db);
+        var (changes, sideEffects, _, _) = ReadChangeSet(action, db);
         IReadOnlyList<PreviewWarning> warnings = [.. ctx.Warnings];
         var expiresAt = time.GetUtcNow() + action.PreviewLifetime;
         var token = signer.Sign(new PreviewTokenPayload(
@@ -201,16 +202,17 @@ public sealed partial class ActionPipeline(
             return Stale(action, StaleReasons.DomainError, CauseOf((AppError)applied.Value));
         }
 
-        var (changes, sideEffects, events) = ReadChangeSet(action, db);
+        var (changes, sideEffects, events, changedRoots) = ReadChangeSet(action, db);
         if (!string.Equals(ChangeSetHasher.Hash(changes, sideEffects, ctx.Warnings), token.ChangesHash, StringComparison.Ordinal))
         {
             return Stale(action, StaleReasons.ChangesDiffer, cause: null);
         }
 
-        // A no-op keeps Version as it is, so other open previews of the same aggregate stay valid.
-        if (changes.Count > 0)
+        // Every aggregate the execute changed gets a new Version, so its concurrency token guards the save and other
+        // open previews of it go stale. An unchanged aggregate keeps its Version, so its other open previews stay valid.
+        foreach (var root in changedRoots)
         {
-            ((IAggregateRoot)target).IncrementVersion();
+            root.IncrementVersion();
         }
 
         // History rows are added after the change set is read and hashed, so they never appear in a response,
@@ -351,16 +353,19 @@ public sealed partial class ActionPipeline(
     }
 
     /// <summary>
-    /// Pending changes, the raised domain events as side effects, and the events with their owning root (then cleared).
+    /// Pending changes, the raised domain events as side effects, the events with their owning root (then cleared), and
+    /// every aggregate root that owns at least one change: these are the roots whose <c>Version</c> the execute bumps.
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// An event has no <c>[Event]</c>, or the action changed state without raising any event. Both are programming
-    /// errors: history must be a complete record, so the call fails as <c>internal.unexpected</c> and nothing commits.
+    /// An event has no <c>[Event]</c>, an aggregate changed without raising an event of its own, or a change has no
+    /// tracked owning root. All are programming errors: history must be a complete record, so the call fails as
+    /// <c>internal.unexpected</c> and nothing commits.
     /// </exception>
-    private (IReadOnlyList<Change> Changes, IReadOnlyList<SideEffect> SideEffects, IReadOnlyList<RaisedEvent> Events) ReadChangeSet(
-        ActionDescriptor action, AppDbContext db)
+    private (IReadOnlyList<Change> Changes, IReadOnlyList<SideEffect> SideEffects, IReadOnlyList<RaisedEvent> Events, IReadOnlyList<IAggregateRoot> ChangedRoots)
+        ReadChangeSet(ActionDescriptor action, AppDbContext db)
     {
         var changes = ChangeSetReader.Read(db.ChangeTracker);
+        var changedRoots = ChangedRoots(action, db);
         var roots = db.ChangeTracker.Entries<IAggregateRoot>().ToList();
         List<RaisedEvent> events = [.. roots.SelectMany(root => root.Entity.DomainEvents.Select(e =>
             new RaisedEvent(e, root.Entity, root.Metadata.ClrType.Name, ChangeSetReader.KeyOf(root))))];
@@ -374,16 +379,34 @@ public sealed partial class ActionPipeline(
             EventNames.Of(raised.Event.GetType());
         }
 
-        if (changes.Count > 0 && events.Count == 0)
+        foreach (var root in changedRoots.Where(r => !events.Any(e => ReferenceEquals(e.Root, r.Entity))))
         {
             throw new InvalidOperationException(
-                $"Action '{action.Name}' changed {changes[0].Entity} {changes[0].Id} without raising a domain event. "
-                + "Every method that changes state must raise an event so the change is recorded in history.");
+                $"Action '{action.Name}' changed {root.Metadata.ClrType.Name} {ChangeSetReader.KeyOf(root)} without raising a domain event "
+                + "on that aggregate. Every method that changes state must raise an event so the change is recorded in history.");
         }
 
         IReadOnlyList<SideEffect> sideEffects =
             [.. events.Select(r => new SideEffect(r.Event.GetType().Name, JsonSerializer.SerializeToNode(r.Event, r.Event.GetType(), Json)!))];
-        return (changes, sideEffects, events);
+        return (changes, sideEffects, events, [.. changedRoots.Select(r => r.Entity)]);
+    }
+
+    /// <summary>The distinct tracked roots owning the pending changes, in tracker order.</summary>
+    private static List<EntityEntry<IAggregateRoot>> ChangedRoots(ActionDescriptor action, AppDbContext db)
+    {
+        List<EntityEntry<IAggregateRoot>> roots = [];
+        foreach (var entry in ChangeSetReader.ChangedEntries(db.ChangeTracker))
+        {
+            var root = ChangeSetReader.RootOf(entry) ?? throw new InvalidOperationException(
+                $"Action '{action.Name}' changed {entry.Metadata.ClrType.Name} {ChangeSetReader.KeyOf(entry)}, which no tracked aggregate root owns. "
+                + "Load the owning aggregate and change the entity through it.");
+            if (!roots.Any(r => ReferenceEquals(r.Entity, root.Entity)))
+            {
+                roots.Add(root.Context.Entry((IAggregateRoot)root.Entity));
+            }
+        }
+
+        return roots;
     }
 
     /// <summary>One history row per raised event, all sharing the execute's time and execution id.</summary>

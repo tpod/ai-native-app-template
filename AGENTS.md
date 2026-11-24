@@ -99,6 +99,7 @@ MCP `structuredContent` is always a JSON object: a list result arrives as `{ "it
 - `preview.stale` or `preview.expired` → call the preview again and show the new result. `details.reason` on stale is `version_changed`, `domain_error`, `changes_differ` or `concurrent_write`.
 - `preview.already_executed` (a create whose id already exists) → don't retry; query to confirm.
 - A no-op mutation previews empty `changes` and does not bump `Version`.
+- An action may change several aggregates in one execute (prefer one; use more only when one rule spans them). Each changed aggregate gets a new `Version` and must raise its own event, or the call fails as `internal.unexpected`. A change to a child entity counts against the root it belongs to.
 - The UI follows the same flow through `<PreviewConfirmDialog>`.
 - Execute accepts an optional `reason` (string, at most 500 characters) beside `previewToken`. It is stored in history and not bound by the token. No input record may declare a `reason` property.
 
