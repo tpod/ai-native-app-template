@@ -16,7 +16,7 @@ description: >
 
 - **Integration tests first.** Use `WebApplicationFactory` (`ApiFactory`, via `ApiTestBase` in `tests/AppTemplate.Api.Tests/Infrastructure`) to test real HTTP pipelines. Integration tests catch the bugs that unit tests miss: serialization, middleware, DI wiring, and query behavior.
 - **In-memory SQLite with real migrations for the fast suite.** The app runs on Postgres, but `ApiFactory` swaps in `SqliteAppDbContext`. Each test gets its own `DataSource=:memory:` connection, held open for the test's lifetime, with the SQLite migrations applied. No container is needed.
-- **Testcontainers Postgres only for provider behaviour.** Migrations, collations and column types, locking and concurrency go in `tests/AppTemplate.Api.PostgresTests` (`PostgresTestBase`: one container per run, one database per test, on rootless Podman). Everything else stays in the fast suite.
+- **Testcontainers Postgres only for provider behaviour.** Migrations, collations and column types, locking and concurrency go in `tests/AppTemplate.Api.PostgresTests` (`PostgresTestBase`: one container per run, migrations applied once to a template, one cloned database per test, on rootless Podman). Everything else stays in the fast suite.
 - **No EF `InMemory` provider.** `UseInMemoryDatabase` has different behavior from real providers (no constraints, no transactions, no SQL translation). `NoAssembly_ReferencesEfCoreInMemory` fails the build if any project references it.
 
 ```csharp

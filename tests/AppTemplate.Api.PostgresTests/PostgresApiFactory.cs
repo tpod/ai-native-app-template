@@ -1,15 +1,12 @@
-using AppTemplate.Api.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace AppTemplate.Api.PostgresTests;
 
 /// <summary>
 /// The real app on a real Postgres database: Program's own <c>UseNpgsql</c> registration, no service replacement.
-/// Only the connection string and the preview signing key come from the test.
+/// Only the connection string and the preview signing key come from the test. The database arrives already
+/// migrated (<see cref="PostgresContainerFixture.CreateDatabaseAsync"/> clones it from the run's template).
 /// </summary>
 public sealed class PostgresApiFactory(string connectionString) : WebApplicationFactory<Program>
 {
@@ -17,17 +14,9 @@ public sealed class PostgresApiFactory(string connectionString) : WebApplication
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        // "Testing" keeps Program's Development-only Migrate from running; CreateHost migrates instead.
+        // "Testing" keeps Program's Development-only Migrate from running; the template is already migrated.
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:appdb", connectionString);
         builder.UseSetting("Preview:SigningKey", SigningKey);
-    }
-
-    protected override IHost CreateHost(IHostBuilder builder)
-    {
-        var host = base.CreateHost(builder);
-        using var scope = host.Services.CreateScope();
-        scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
-        return host;
     }
 }

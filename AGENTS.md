@@ -236,7 +236,7 @@ Postgres is the only runtime database: `Program.cs` registers `PostgresAppDbCont
 
 - Each provider has its own migration set (`Data/Migrations/Postgres`, `Data/Migrations/Sqlite`). Add both with `scripts/add-migration.sh <Name>`; `ProviderModelTests` fails if one is missing or the two models differ.
 - Configurations stay provider-neutral. Case-insensitive text is `.IsCaseInsensitive()`: `citext` on Postgres, `NOCASE` on SQLite (`src/AppTemplate.Api/Data/CaseInsensitiveText.cs`).
-- Tests: almost everything belongs in the fast SQLite suite (`tests/AppTemplate.Api.Tests`). Put a test in `tests/AppTemplate.Api.PostgresTests` only when it checks behaviour that differs by provider: migrations, collations and column types, locking, concurrency. It uses one container per run and one database per test.
+- Tests: almost everything belongs in the fast SQLite suite (`tests/AppTemplate.Api.Tests`). Put a test in `tests/AppTemplate.Api.PostgresTests` only when it checks behaviour that differs by provider: migrations, collations and column types, locking, concurrency. It uses one container per run; the migrations run once into a template database, and each test gets its own database cloned from it (`CREATE DATABASE … TEMPLATE`, `PostgresContainerFixture.CreateDatabaseAsync`). A test of the migrations themselves uses `CreateEmptyDatabaseAsync`.
 - `scripts/verify.sh` runs the Postgres tests by default and fails with the setup command when no container runtime answers. `VERIFY_POSTGRES=0` skips them and prints `POSTGRES TESTS SKIPPED`.
 
 **Podman setup, once per machine.** The AppHost (`ASPIRE_CONTAINER_RUNTIME=podman` in its launch profiles) and Testcontainers both use rootless Podman:
