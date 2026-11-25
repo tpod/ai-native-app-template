@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
 using AppTemplate.Api.Actions.Events;
+using AppTemplate.Api.Actions.Telemetry;
 using AppTemplate.Api.Data;
 using AppTemplate.Domain.Common;
 using Microsoft.AspNetCore.Http.Json;
@@ -21,6 +23,7 @@ public sealed partial class OutboxProcessor(
     TimeProvider time,
     IOptions<OutboxOptions> options,
     IOptions<JsonOptions> jsonOptions,
+    OutboxMetrics metrics,
     ILogger<OutboxProcessor> logger)
 {
     private const int MaxDrainRounds = 1000;
@@ -89,11 +92,11 @@ public sealed partial class OutboxProcessor(
         context.DeliveryId = row.Id;
         context.Attempt = row.Attempts;
         var store = services.GetRequiredService<OutboxStore>();
+        using var activity = StartSpan(row);
 
         if (Prepare(row).TryPickT1(out var undeliverable, out var delivery))
         {
-            LogDead(row.Id, row.Subscriber, row.HistoryEntry.EventType, undeliverable);
-            await store.MarkDeadAsync(row.Id, row.Attempts, undeliverable, ct);
+            await DeadAsync(store, row, undeliverable, activity, ct);
             return;
         }
 
@@ -103,7 +106,9 @@ public sealed partial class OutboxProcessor(
         try
         {
             await delivery(services, timeout.Token);
-            await store.CompleteAsync(row.Id, row.Attempts, time.GetUtcNow(), ct);
+            var now = time.GetUtcNow();
+            await store.CompleteAsync(row.Id, row.Attempts, now, ct);
+            Settle(activity, OutboxTelemetry.OutcomeDone, error: null, lag: now - row.HistoryEntry.OccurredAt);
             return;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -123,13 +128,51 @@ public sealed partial class OutboxProcessor(
 
         if (row.Attempts >= Options.MaxAttempts)
         {
-            LogDead(row.Id, row.Subscriber, row.HistoryEntry.EventType, error);
-            await store.MarkDeadAsync(row.Id, row.Attempts, error, ct);
+            await DeadAsync(store, row, error, activity, ct);
         }
         else
         {
             await store.FailAsync(row.Id, row.Attempts, error, time.GetUtcNow() + Backoff(row.Attempts, Options), ct);
+            Settle(activity, OutboxTelemetry.OutcomeRetry, error, lag: null);
         }
+    }
+
+    private async Task DeadAsync(OutboxStore store, OutboxDelivery row, string reason, Activity? activity, CancellationToken ct)
+    {
+        LogDead(row.Id, row.Subscriber, row.HistoryEntry.EventType, reason);
+        await store.MarkDeadAsync(row.Id, row.Attempts, reason, ct);
+        Settle(activity, OutboxTelemetry.OutcomeDead, reason, lag: null);
+    }
+
+    /// <summary>A root span per attempt, linked to the execute's trace when history recorded one.</summary>
+    private static Activity? StartSpan(OutboxDelivery row)
+    {
+        var entry = row.HistoryEntry;
+        ActivityLink[]? links = null;
+        if (entry.TraceId is { Length: 32 } traceId)
+        {
+            // History keeps only the trace id, so the link points at the trace rather than a specific span.
+            links = [new ActivityLink(new ActivityContext(ActivityTraceId.CreateFromString(traceId), default, ActivityTraceFlags.None))];
+        }
+
+        var activity = ActionTelemetry.Source.StartActivity(
+            OutboxTelemetry.SpanPrefix + row.Subscriber, ActivityKind.Consumer, parentContext: default, links: links);
+        activity?.SetTag(OutboxTelemetry.TagSubscriber, row.Subscriber)
+            .SetTag(OutboxTelemetry.TagAttempt, row.Attempts)
+            .SetTag(OutboxTelemetry.TagEventName, entry.EventType)
+            .SetTag(ActionTelemetry.TagAggregateType, row.AggregateType);
+        return activity;
+    }
+
+    private void Settle(Activity? activity, string outcome, string? error, TimeSpan? lag)
+    {
+        activity?.SetTag(OutboxTelemetry.TagOutcome, outcome);
+        if (error is not null)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, error);
+        }
+
+        metrics.Record(outcome, lag);
     }
 
     /// <summary>Resolves the subscriber and decodes the event, or says why this row can never be delivered.</summary>

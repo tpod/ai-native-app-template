@@ -265,6 +265,57 @@
       },
       "JsonElement": {},
       "JsonNode": {},
+      "ListOutboxDeliveriesInput": {
+        "properties": {
+          "aggregateId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "aggregateType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "beforeId": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "limit": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OutboxStatus"
+              }
+            ]
+          },
+          "subscriber": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "ListProjectsInput": {
         "properties": {
           "status": {
@@ -279,6 +330,96 @@
           }
         },
         "type": "object"
+      },
+      "OutboxDeliveryDto": {
+        "properties": {
+          "aggregateId": {
+            "type": "string"
+          },
+          "aggregateType": {
+            "type": "string"
+          },
+          "attempts": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "completedAt": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "event": {
+            "type": "string"
+          },
+          "historyEntryId": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "id": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "lastError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "leaseUntil": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nextAttemptAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OutboxStatus"
+          },
+          "subscriber": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subscriber",
+          "event",
+          "aggregateType",
+          "aggregateId",
+          "status",
+          "attempts",
+          "nextAttemptAt",
+          "leaseUntil",
+          "completedAt",
+          "lastError",
+          "historyEntryId"
+        ],
+        "type": "object"
+      },
+      "OutboxStatus": {
+        "enum": [
+          "pending",
+          "in_flight",
+          "done",
+          "dead"
+        ]
       },
       "PreviewResponse": {
         "properties": {
@@ -1535,6 +1676,70 @@
               }
             },
             "description": "Possible codes: project.not_found."
+          },
+          "422": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: validation.failed."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: internal.unexpected."
+          }
+        },
+        "tags": [
+          "AppTemplate.Api"
+        ]
+      }
+    },
+    "/api/queries/list_outbox_deliveries": {
+      "post": {
+        "description": "Outbox deliveries of committed events to subscribers (handlers, publishers), newest first, with status (pending, in_flight, done, dead), attempts and the last error. Find deliveries that are dead or stuck; get_history shows the event itself. Page back with beforeId. Possible error codes: validation.failed.",
+        "operationId": "list_outbox_deliveries",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListOutboxDeliveriesInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OutboxDeliveryDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Possible codes: request.malformed."
           },
           "422": {
             "content": {

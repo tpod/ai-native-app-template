@@ -208,6 +208,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/queries/list_outbox_deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Outbox deliveries of committed events to subscribers (handlers, publishers), newest first, with status (pending, in_flight, done, dead), attempts and the last error. Find deliveries that are dead or stuck; get_history shows the event itself. Page back with beforeId. Possible error codes: validation.failed. */
+        post: operations["list_outbox_deliveries"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/queries/list_projects": {
         parameters: {
             query?: never;
@@ -296,9 +313,41 @@ export interface components {
         };
         JsonElement: unknown;
         JsonNode: unknown;
+        ListOutboxDeliveriesInput: {
+            aggregateId?: null | string;
+            aggregateType?: null | string;
+            /** Format: int64 */
+            beforeId?: null | number | string;
+            /** Format: int32 */
+            limit?: null | number | string;
+            status?: null | components["schemas"]["OutboxStatus"];
+            subscriber?: null | string;
+        };
         ListProjectsInput: {
             status?: null | components["schemas"]["ProjectStatus"];
         };
+        OutboxDeliveryDto: {
+            aggregateId: string;
+            aggregateType: string;
+            /** Format: int32 */
+            attempts: number | string;
+            /** Format: date-time */
+            completedAt: null | string;
+            event: string;
+            /** Format: int64 */
+            historyEntryId: number | string;
+            /** Format: int64 */
+            id: number | string;
+            lastError: null | string;
+            /** Format: date-time */
+            leaseUntil: null | string;
+            /** Format: date-time */
+            nextAttemptAt: string;
+            status: components["schemas"]["OutboxStatus"];
+            subscriber: string;
+        };
+        /** @enum {unknown} */
+        OutboxStatus: "pending" | "in_flight" | "done" | "dead";
         PreviewResponse: {
             action: string;
             changes: components["schemas"]["Change"][];
@@ -1155,6 +1204,57 @@ export interface operations {
             };
             /** @description Possible codes: project.not_found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Possible codes: validation.failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Possible codes: internal.unexpected. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_outbox_deliveries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListOutboxDeliveriesInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxDeliveryDto"][];
+                };
+            };
+            /** @description Possible codes: request.malformed. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

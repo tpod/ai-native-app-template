@@ -1,4 +1,5 @@
 using AppTemplate.Api.Actions.Events;
+using AppTemplate.Api.Actions.Telemetry;
 using AppTemplate.Api.Data;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -50,6 +51,7 @@ public static class OutboxServiceCollectionExtensions
         services.AddOutboxSubscribers();
         services.TryAddScoped<OutboxStore>();
         services.TryAddScoped<OutboxDeliveryContext>();
+        services.TryAddSingleton<OutboxMetrics>();
         services.TryAddSingleton<OutboxProcessor>();
         services.AddHostedService<OutboxWorker>();
         return services;

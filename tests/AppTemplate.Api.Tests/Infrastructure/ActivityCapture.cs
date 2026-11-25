@@ -23,6 +23,9 @@ public sealed class ActivityCapture : IDisposable
         ActivitySource.AddActivityListener(_listener);
     }
 
+    /// <summary>Every captured span, from any test running in this process; filter by something unique to yours.</summary>
+    public IReadOnlyList<Activity> All => [.. _activities];
+
     public IReadOnlyList<Activity> ForTrace(string traceId)
         => [.. _activities.Where(a => a.TraceId.ToString() == traceId).OrderBy(a => a.StartTimeUtc)];
 
