@@ -17,7 +17,7 @@ Directory.Build.props / Directory.Packages.props   # net10.0, warnings as errors
 AGENTS.md  CLAUDE.md  .mcp.json  .claude/{settings.json,rules/,skills/}
 scripts/verify.sh  scripts/update-openapi.sh  scripts/rename.sh
 src/
-  AppTemplate.AppHost/          # Aspire: SQLite appdb, api, Vite web
+  AppTemplate.AppHost/          # Aspire: Postgres appdb (Podman), api, Vite web
   AppTemplate.ServiceDefaults/  # OpenTelemetry, health checks, resilience
   AppTemplate.Domain/           # aggregates, entities, value objects, errors, events. References only OneOf
     Common/                     # AggregateRoot, AppError, ErrorAttribute, IValueObject, IDomainEvent, ValidationFailed
@@ -34,7 +34,8 @@ tests/
     Infrastructure/             # ApiFactory, ApiTestBase, ApiResponseShouldly, CoversAttribute
     Fixtures/Notes/             # fixture_* actions for framework tests
     Features/<Aggregate>/       # one {ActionClass}Tests per action
-  AppTemplate.Architecture.Tests/  # layering, banned types, error codes, [Covers] coverage
+  AppTemplate.Api.PostgresTests/   # provider behaviour on real Postgres (Testcontainers on Podman)
+  AppTemplate.Architecture.Tests/  # layering, banned types, error codes, [Covers] coverage, provider models
 ```
 
 ## Golden rules
@@ -88,7 +89,6 @@ Skill map:
 | Debug a failure | `skill:investigate` |
 | Delete the Projects example | `skill:remove-example` |
 | Rename the template | `skill:rename-template` |
-| Move to Postgres | `skill:swap-to-postgres` |
 
 ## Preview protocol
 
@@ -133,10 +133,12 @@ Every error is RFC 9457 ProblemDetails (`application/problem+json`), the same JS
 | Task | Command |
 |---|---|
 | Is it green? Run before claiming done | `scripts/verify.sh` (must print `VERIFY OK`) |
-| Run everything (dashboard, SQLite `appdb`, `api`, Vite `web`) | `dotnet run --project src/AppTemplate.AppHost` |
-| Full test suite | `dotnet test --solution AppTemplate.slnx` |
+| Is it green, without Postgres (prints `POSTGRES TESTS SKIPPED`) | `VERIFY_POSTGRES=0 scripts/verify.sh` |
+| Run everything (dashboard, Postgres `appdb` on Podman, `api`, Vite `web`) | `dotnet run --project src/AppTemplate.AppHost` |
+| Full test suite (the Postgres project needs `DOCKER_HOST`, see "Databases") | `dotnet test --solution AppTemplate.slnx` |
+| Postgres tests only | `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock dotnet test --project tests/AppTemplate.Api.PostgresTests` |
 | Focused tests | `dotnet test --project tests/AppTemplate.Api.Tests --filter "FullyQualifiedName~RenameProjectTests"` |
-| Add a migration (run `dotnet tool restore` once first) | `dotnet tool run dotnet-ef migrations add <Name> -p src/AppTemplate.Api -o Data/Migrations` |
+| Add a migration, for both Postgres and SQLite | `scripts/add-migration.sh <Name>` |
 | After changing an action's contract | `scripts/update-openapi.sh`, then `cd src/web && npm run gen:api` |
 | Rename the template | `scripts/rename.sh <NewName>` (see `skill:rename-template`) |
 
@@ -182,13 +184,13 @@ dotnet-claude-kit is the base. Where it conflicts with this file, this file wins
 | FluentValidation via `ValidationFilter<T>` / Mediator `ValidationBehavior`, which throw `ValidationException` | FluentValidation run by the action registry with `ValidateAsync`, **never throwing**. Value objects own the rules through `MustBeValid` |
 | Mediator / MediatR `IRequest` + handlers; `IEndpointGroup` endpoints; `/scaffold` for features | **The action registry.** One `[Action]`/`[Query]` class generates the HTTP + MCP + preview. Never hand-write endpoints or MCP tools for actions. **No `/scaffold`**: use `skill:add-action` |
 | Domain events implement Mediator `INotification` | Our own `IDomainEvent`, handled by `IDomainEventHandler<T>` after commit. Domain depends only on OneOf |
-| Integration tests on Testcontainers Postgres | In-memory **SQLite** with real migrations. EF `InMemory` stays banned, as in the kit |
+| Integration tests on Testcontainers Postgres | In-memory **SQLite** with real migrations for the fast suite; Testcontainers Postgres only in `tests/AppTemplate.Api.PostgresTests`, for provider behaviour. EF `InMemory` stays banned, as in the kit |
 | Clean Architecture in 4 projects (Domain/Application/Infrastructure/Api) | **Domain + Api** (see the architecture map). Judge `/arch-check` against that map |
 | Value objects validate in the constructor; positional records (public constructor) for value objects | `sealed` record with a private constructor + `Create` returning OneOf (golden rule 3). `ValueObjects_AreSealedWithoutPublicParameterizedConstructors` enforces it. Positional records stay fine for DTOs and inputs |
 | Assertions with xUnit `Assert` | **Shouldly** only. No `Assert.*`, no FluentAssertions |
 | `dotnet test` with VSTest options; piping into `hooks/post-test-analyze.sh` | **MTP commands**: `dotnet test --solution AppTemplate.slnx` or `--project … --filter …`; exit 8 = no tests matched. Don't pipe test output into the hook script (it isn't in this repo, and the pipe hides the exit code); read `dotnet test`'s own exit code, as `scripts/verify.sh` does |
 | ProblemDetails for errors | Same, plus the required extensions `code`, `details`, `suggestion` and `traceId` |
-| Aspire examples with `AddPostgres` / `AddNpgsqlDbContext` | `AddSqlite` for v1; Postgres only via `skill:swap-to-postgres` |
+| Aspire examples with `AddPostgres` / `AddNpgsqlDbContext` | `AddPostgres` in the AppHost, but `AddDbContext<AppDbContext, PostgresAppDbContext>` + `UseNpgsql` in the Api, not `AddNpgsqlDbContext` (it pools contexts, and `AppDbContext` takes `IModelContributor`s). See "Databases" |
 | `/dotnet-init` to set up a project | **Never run `/dotnet-init`.** It overwrites `CLAUDE.md`, which must stay `@AGENTS.md` |
 | (official `aspire` plugin) run `aspire agent init` | **Never run `aspire agent init`.** It writes hooks into user-level `~/.claude/settings.json`. The Aspire MCP server is already in `.mcp.json` |
 | Async suffix on every async method; one type per file; `internal` by default | Action convention methods are named exactly `Load`, `Apply` and `Run`. An action file holds its input record and handler; validators are grouped in `<Aggregate>Validators.cs`. Handlers, inputs, validators and errors are `public` |
@@ -216,6 +218,7 @@ The edited kit rules in `.claude/rules/` (`architecture.md`, `error-handling.md`
 
 Install once per machine:
 
+- **Podman**, the container runtime for the AppHost's Postgres and the Postgres tests: see "Databases".
 - **Aspire CLI**, for the `aspire` MCP server: `curl -sSL https://aspire.dev/install.sh | bash`, or `dotnet tool install -g Aspire.Cli`.
 - **Roslyn navigator**, for the kit's MCP server: `dotnet tool install -g CWM.RoslynNavigator`.
 - **Context7 API key** (optional; raises rate limits). Context7 works without one. Keep the key in the `CONTEXT7_API_KEY` environment variable and never commit it. To use it, add a local-scope override of the same server: `claude mcp add --scope local --transport http --header "Authorization: Bearer $CONTEXT7_API_KEY" context7 https://mcp.context7.com/mcp`.
@@ -228,6 +231,21 @@ Other agents don't get the plugins. They still get this file, `.claude/rules/` a
 - `/dotnet-init`: overwrites `CLAUDE.md`.
 - `git push --force`, `git reset --hard`, `rm -rf`, `pkill`: the kit's bash guard blocks them. Don't work around it.
 
-## Swap to Postgres
+## Databases
 
-v1 targets SQLite. To move to Postgres, follow `skill:swap-to-postgres`: change the AppHost resource to `AddPostgres(...).AddDatabase("appdb")`, register `UseNpgsql`, and regenerate the migrations as a new initial migration. The `NOCASE` collation on `ProjectName` (`src/AppTemplate.Api/Data/ProjectConfiguration.cs`) is SQLite-specific and must change too.
+Postgres is the only runtime database: `Program.cs` registers `PostgresAppDbContext` with `UseNpgsql`. SQLite exists only for the fast test suite: `ApiFactory` swaps in `SqliteAppDbContext` on an in-memory connection. Everything injects the abstract `AppDbContext`.
+
+- Each provider has its own migration set (`Data/Migrations/Postgres`, `Data/Migrations/Sqlite`). Add both with `scripts/add-migration.sh <Name>`; `ProviderModelTests` fails if one is missing or the two models differ.
+- Configurations stay provider-neutral. Case-insensitive text is `.IsCaseInsensitive()`: `citext` on Postgres, `NOCASE` on SQLite (`src/AppTemplate.Api/Data/CaseInsensitiveText.cs`).
+- Tests: almost everything belongs in the fast SQLite suite (`tests/AppTemplate.Api.Tests`). Put a test in `tests/AppTemplate.Api.PostgresTests` only when it checks behaviour that differs by provider: migrations, collations and column types, locking, concurrency. It uses one container per run; the migrations run once into a template database, and each test gets its own database cloned from it (`CREATE DATABASE … TEMPLATE`, `PostgresContainerFixture.CreateDatabaseAsync`). A test of the migrations themselves uses `CreateEmptyDatabaseAsync`.
+- `scripts/verify.sh` runs the Postgres tests by default and fails with the setup command when no container runtime answers. `VERIFY_POSTGRES=0` skips them and prints `POSTGRES TESTS SKIPPED`.
+
+**Podman setup, once per machine.** The AppHost (`ASPIRE_CONTAINER_RUNTIME=podman` in its launch profiles) and Testcontainers both use rootless Podman:
+
+```bash
+sudo apt-get install -y podman
+systemctl --user enable --now podman.socket
+podman pull docker.io/library/postgres:18.6   # optional: avoids a slow first pull timing out the AppHost
+```
+
+`scripts/verify.sh` sets `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock` when it is unset and that socket exists. If the AppHost's `postgres` resource ends `FailedToStart` with `context deadline exceeded`, the image pull was too slow: pull it as above and run again. Local data lives in the Podman volume `apptemplate.apphost-<hash>-postgres-data`.

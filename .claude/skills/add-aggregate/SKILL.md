@@ -27,8 +27,7 @@ The Domain project references only OneOf. Do not add packages to it.
 4. Add the migration:
 
 ```bash
-dotnet tool restore
-dotnet tool run dotnet-ef migrations add Add<Aggregates> -p src/AppTemplate.Api -o Data/Migrations
+scripts/add-migration.sh Add<Aggregates>
 ```
 
 Read the generated `Up`: one `CreateTable` for the root, one per child entity, and no changes to other tables.

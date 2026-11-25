@@ -8,7 +8,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlite(builder.Configuration.GetConnectionString("appdb")));
+builder.Services.AddDbContext<AppDbContext, PostgresAppDbContext>(o => o.UseNpgsql(
+    builder.Configuration.GetConnectionString("appdb") is { Length: > 0 } appdb
+        ? appdb
+        : throw new InvalidOperationException(
+            "ConnectionStrings:appdb is not set. Run the app through the AppHost (dotnet run --project src/AppTemplate.AppHost), "
+            + "which starts Postgres and supplies it, or set ConnectionStrings__appdb to a Postgres connection string.")));
 
 builder.Services.AddAppProblemDetails();
 builder.Services.AddActions();

@@ -27,7 +27,7 @@ return ctx.Db.Projects.Include(p => p.Tasks).FirstOrDefaultAsync(p => p.Id == pr
 public interface IRepository<T> { Task<T?> GetByIdAsync(Guid id); }
 ```
 
-- **No provider-specific SQL in domain or feature code.** No raw SQL, no SQLite-only functions. Provider details stay in `src/AppTemplate.Api/Data` so the Postgres swap stays a configuration change.
+- **No provider-specific SQL in domain or feature code.** No raw SQL, no SQLite-only functions. Provider details stay in `src/AppTemplate.Api/Data`, where the Postgres (runtime) and SQLite (fast tests) contexts translate provider-neutral configuration.
 
 ## Endpoints and MCP Tools Are Generated
 

@@ -2,8 +2,8 @@ using Aspire.Hosting.ApplicationModel;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-// SQLite file lives next to the AppHost project; *.db is gitignored.
-var db = builder.AddSqlite("appdb", builder.AppHostDirectory, "app.db");
+// Postgres in a Podman container (ASPIRE_CONTAINER_RUNTIME=podman in launchSettings); data persists in a volume.
+var db = builder.AddPostgres("postgres").WithDataVolume().AddDatabase("appdb");
 
 // Generated once, persisted to the AppHost user secrets. >= 48 chars, Api needs >= 32 UTF-8 bytes.
 var signingKey = builder.AddParameter(

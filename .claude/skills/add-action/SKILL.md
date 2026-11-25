@@ -90,8 +90,7 @@ The registry checks every rule above when the app starts and throws `ActionRegis
 Only when the persisted shape changed (new property, child entity or index). Edit the aggregate's `IEntityTypeConfiguration<T>` in `src/AppTemplate.Api/Data/`, then:
 
 ```bash
-dotnet tool restore
-dotnet tool run dotnet-ef migrations add <Name> -p src/AppTemplate.Api -o Data/Migrations
+scripts/add-migration.sh <Name>
 ```
 
 `PersistenceTests.Model_AfterMigrations_HasNoPendingChanges` fails if you forget the migration.

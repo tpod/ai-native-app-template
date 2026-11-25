@@ -3,10 +3,11 @@ alwaysApply: true
 description: >
   Enforces testing strategy, patterns, and naming conventions for this
   template: xUnit v3 on Microsoft.Testing.Platform, WebApplicationFactory,
-  in-memory SQLite with real migrations, Shouldly, and [Covers] coverage.
+  in-memory SQLite with real migrations (Testcontainers Postgres only for
+  provider behaviour), Shouldly, and [Covers] coverage.
 ---
 
-> Edited for this template: differs from dotnet-claude-kit on the test database (in-memory SQLite with real migrations, not Testcontainers), assertions (Shouldly, not `Assert`), fixtures (one database per test) and mandatory `[Covers]` coverage per action. See AGENTS.md → dotnet-claude-kit overrides.
+> Edited for this template: differs from dotnet-claude-kit on the test database (in-memory SQLite with real migrations for the fast suite; Testcontainers Postgres only for provider behaviour), assertions (Shouldly, not `Assert`), fixtures (one database per test) and mandatory `[Covers]` coverage per action. See AGENTS.md → dotnet-claude-kit overrides.
 > Source: [dotnet-claude-kit](https://github.com/codewithmukesh/dotnet-claude-kit) `.claude/rules/testing.md`, commit 6de62a5 (kit v0.14.0). MIT License, Copyright (c) 2025 Mukesh Murugan.
 
 # Testing Rules
@@ -14,7 +15,8 @@ description: >
 ## Strategy
 
 - **Integration tests first.** Use `WebApplicationFactory` (`ApiFactory`, via `ApiTestBase` in `tests/AppTemplate.Api.Tests/Infrastructure`) to test real HTTP pipelines. Integration tests catch the bugs that unit tests miss: serialization, middleware, DI wiring, and query behavior.
-- **In-memory SQLite with real migrations, no Testcontainers.** Each test gets its own `DataSource=:memory:` connection, held open for the test's lifetime, with the EF migrations applied. No Docker is needed.
+- **In-memory SQLite with real migrations for the fast suite.** The app runs on Postgres, but `ApiFactory` swaps in `SqliteAppDbContext`. Each test gets its own `DataSource=:memory:` connection, held open for the test's lifetime, with the SQLite migrations applied. No container is needed.
+- **Testcontainers Postgres only for provider behaviour.** Migrations, collations and column types, locking and concurrency go in `tests/AppTemplate.Api.PostgresTests` (`PostgresTestBase`: one container per run, migrations applied once to a template, one cloned database per test, on rootless Podman). Everything else stays in the fast suite.
 - **No EF `InMemory` provider.** `UseInMemoryDatabase` has different behavior from real providers (no constraints, no transactions, no SQL translation). `NoAssembly_ReferencesEfCoreInMemory` fails the build if any project references it.
 
 ```csharp
@@ -23,7 +25,7 @@ public sealed class RenameProjectTests : ProjectTestBase { /* ... */ }
 
 // DON'T
 options.UseInMemoryDatabase("TestDb");
-new PostgreSqlBuilder().Build(); // Testcontainers
+new PostgreSqlBuilder(...).Build(); // in the fast suite: provider tests belong in AppTemplate.Api.PostgresTests
 ```
 
 ## Assertions

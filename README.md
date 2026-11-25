@@ -33,9 +33,9 @@ The action registry turns that class into HTTP endpoints, an MCP tool, an OpenAP
 | **Every state change goes through an action and raises an event** | That keeps history, validation, stale checks and telemetry complete. Jobs and imports call actions too. |
 | **Errors are ProblemDetails with `code` and `suggestion`** | Agents act on a stable code and a next step, never on prose. HTTP and MCP return the same JSON, with a `traceId`. |
 | **EF Core `DbContext` is the unit of work; no repositories, no Mediator** | Repositories hide EF features and add nothing. The action registry replaces request handlers. |
-| **Provider details stay in `Data/`; SQLite first** | Zero setup locally, and moving to Postgres is a recipe, not a rewrite. Migrations apply automatically only in development. |
+| **Postgres at runtime, provider details in `Data/`** | Local runs use the same database as production: the AppHost starts Postgres on rootless Podman. Configurations stay provider-neutral and each provider context translates them. Migrations apply automatically only in development. |
 | **Two projects: Domain + Api** | Domain references only OneOf. Clean Architecture's four layers add ceremony without value here. |
-| **Integration tests on in-memory SQLite with real migrations** | No Docker and no EF InMemory. Every action needs tests for its happy path, each of its error codes and the stale case. |
+| **Fast integration tests on in-memory SQLite, provider tests on Postgres** | The fast suite needs no container and no EF InMemory; a small Testcontainers project covers what differs on Postgres, cloning one migrated template database per test. Every action needs tests for its happy path, each of its error codes and the stale case. |
 | **Architecture tests enforce the rules** | Layering, banned types, error-code format and test coverage fail the build, not a code review. |
 | **Auth deferred** | v1 runs on localhost behind an origin check. Add auth before exposing it. |
 
@@ -60,4 +60,3 @@ Coding agents get step-by-step recipes as skills in `.claude/skills/`:
 - `remove-example`: delete the Projects example.
 - `event-storming`: discover and model your domain first, from research and your own schemas, code and docs, into a Brandolini specification.
 - `add-aggregate`, `add-action`: build your own domain.
-- `swap-to-postgres`: move off SQLite.

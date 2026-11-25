@@ -4,7 +4,12 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace AppTemplate.Api.Data;
 
-public sealed class AppDbContext(DbContextOptions<AppDbContext> options, IEnumerable<IModelContributor> contributors)
+/// <summary>
+/// The unit of work every action and query uses. Abstract: the app runs on <see cref="PostgresAppDbContext"/>, and
+/// the fast test suite on <see cref="SqliteAppDbContext"/>. Each provider subclass owns its migration set and
+/// translates provider-neutral annotations (such as <see cref="CaseInsensitiveText"/>) into its own mapping.
+/// </summary>
+public abstract class AppDbContext(DbContextOptions options, IEnumerable<IModelContributor> contributors)
     : DbContext(options)
 {
     private readonly IModelContributor[] _contributors = [.. contributors];
@@ -33,6 +38,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, IEnumer
 
     private sealed class ContributorModelCacheKeyFactory : IModelCacheKeyFactory
     {
+        // Keyed on the runtime type, so the Postgres and SQLite models are cached separately.
         public object Create(DbContext context, bool designTime)
             => (context.GetType(), designTime, (context as AppDbContext)?.ContributorKey);
     }

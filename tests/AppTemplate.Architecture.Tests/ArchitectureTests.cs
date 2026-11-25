@@ -125,8 +125,8 @@ public sealed class ArchitectureTests
     {
         using var connection = new SqliteConnection("DataSource=:memory:");
         connection.Open();
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
-        using var context = new AppDbContext(options, []);
+        var options = new DbContextOptionsBuilder<SqliteAppDbContext>().UseSqlite(connection).Options;
+        using var context = new SqliteAppDbContext(options, []);
 
         var roots = context.Model.GetEntityTypes()
             .Where(e => typeof(IAggregateRoot).IsAssignableFrom(e.ClrType))
