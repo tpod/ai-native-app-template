@@ -2,8 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using AppTemplate.Api.Actions.Outbox;
 using AppTemplate.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AppTemplate.Api.PostgresTests;
 
@@ -20,12 +22,23 @@ public abstract class PostgresTestBase(PostgresContainerFixture postgres) : IAsy
 
     protected HttpClient Client { get; private set; } = null!;
 
+    /// <summary>The app's services, for resolving outbox internals.</summary>
+    protected IServiceProvider Services => _factory.Services;
+
     public async ValueTask InitializeAsync()
     {
         _connectionString = await postgres.CreateDatabaseAsync();
-        _factory = new PostgresApiFactory(_connectionString);
+        _factory = new PostgresApiFactory(_connectionString, ConfigureServices);
         Client = _factory.CreateClient();
     }
+
+    /// <summary>Registers extra services (for example a test event handler) before the host builds.</summary>
+    protected virtual void ConfigureServices(IServiceCollection services)
+    {
+    }
+
+    /// <summary>Delivers every claimable outbox row now; the background worker is off in these tests.</summary>
+    protected Task<int> DrainOutboxAsync() => Services.GetRequiredService<OutboxProcessor>().DrainAsync(Ct);
 
     public async ValueTask DisposeAsync()
     {
