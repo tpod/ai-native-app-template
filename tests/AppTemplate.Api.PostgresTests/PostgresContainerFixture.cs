@@ -16,8 +16,9 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
     public const string NoRuntimeMessage =
         "No container runtime: start Podman with 'systemctl --user start podman.socket' and set DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock";
 
-    // Fully qualified: Podman does not resolve short image names without a registries.conf alias.
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("docker.io/library/postgres:17-alpine").Build();
+    // The image Aspire 17's AddPostgres uses, so tests and local runs share a major version. Fully qualified:
+    // Podman does not resolve short image names without a registries.conf alias.
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("docker.io/library/postgres:18.6").Build();
 
     public async ValueTask InitializeAsync()
     {

@@ -7,7 +7,7 @@
     <PackageVersion Include="Aspire.Hosting.AppHost" Version="17.0.0" />
     <PackageVersion Include="Aspire.Hosting.Dotnet" Version="17.0.0" />
     <PackageVersion Include="Aspire.Hosting.JavaScript" Version="17.0.0" />
-    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.SQLite" Version="17.0.0-beta.1078" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="17.0.0" />
     <!-- Service defaults / telemetry -->
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.10.0" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.10.0" />

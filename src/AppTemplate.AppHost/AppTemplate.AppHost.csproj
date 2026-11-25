@@ -9,7 +9,7 @@
     <PackageReference Include="Aspire.Hosting.AppHost" />
     <PackageReference Include="Aspire.Hosting.Dotnet" />
     <PackageReference Include="Aspire.Hosting.JavaScript" />
-    <PackageReference Include="CommunityToolkit.Aspire.Hosting.SQLite" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
   </ItemGroup>
 
   <ItemGroup>
