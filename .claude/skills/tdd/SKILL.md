@@ -8,6 +8,7 @@ description: Use when writing tests for a new or changed action or query, before
 Base: `dotnet-claude-kit:tdd`. Differences in this template:
 
 - **The unit of test is an action**, driven over HTTP through `WebApplicationFactory`, with the real pipeline, validator, EF mapping and migrations on in-memory SQLite. No EF `InMemory` provider. A test that checks provider behaviour (migrations, collations, locking, concurrency) goes in `tests/AppTemplate.Api.PostgresTests` instead, on Testcontainers Postgres (AGENTS.md, "Databases"); action tests and `[Covers]` stay in the fast suite.
+- **Side effects arrive through the outbox.** The worker is off in tests: call `await DrainOutboxAsync()` (on `ApiTestBase`) before asserting that a handler or publisher ran, and advance `Factory.Time` to reach a retry. Register a test subscriber with `services.AddEventHandler<T>(ServiceLifetime.Singleton)` in `ConfigureServices`; it needs `[Subscriber("name")]` and must be idempotent, as delivery is at least once.
 - **Shouldly only.** No `Assert.*`, no FluentAssertions.
 - **`[Covers]` is mandatory.** `CoverageTests` (`tests/AppTemplate.Architecture.Tests/CoverageTests.cs`) fails unless each action has a class named `{ActionClass}Tests` with `[Covers]` for `Case.HappyPath`, every declared error code and, for mutations, `Case.Stale`.
 - **Microsoft.Testing.Platform commands.** Exit code 8 means no test matched the filter: treat it as a failure.

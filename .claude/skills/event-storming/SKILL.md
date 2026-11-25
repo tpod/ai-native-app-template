@@ -161,7 +161,7 @@ When a bounded context reaches Software Design level and its constraints are nam
 
 Two places where the spec and the template can disagree, so raise them as hotspots instead of quietly bending one to fit the other:
 
-- **Policies across contexts or with external systems.** Event handlers here run in-process, after commit and best effort, with no outbox. A policy whose failure costs money or breaks compliance needs something more reliable; flag it.
+- **Policies across contexts or with external systems.** Event handlers and publishers here are delivered through a transactional outbox: at least once, retried, in order per aggregate, and dead after 10 attempts (AGENTS.md, "Outbox and side effects"). Flag a policy that needs exactly-once effects, cross-aggregate ordering or a compensating action when delivery dies.
 - **Aggregate size.** A constraint whose invariants span many things often means two aggregates, or a rule that only needs eventual consistency. Each action loads and saves one aggregate, so the spec's transactional boundaries must match.
 
 Write the tests first for each action, per `skill:tdd`, using the spec's preconditions and invariants as the error cases.

@@ -113,8 +113,8 @@ public sealed record ProjectRenamed(Guid ProjectId, string OldName, string NewNa
 - Name events `<aggregate>.<past_tense_verb>`; child-entity events use the root's prefix (`project.task_added`). `EventNameTests` requires `[Event]`, a well-formed name and uniqueness.
 - The name and payload are a history contract: rows keep them forever. Never rename an event's `[Event]` name. When the payload changes incompatibly (a field removed, renamed or retyped), bump the version; adding an optional field does not need a bump.
 - Carry the ids a reader needs to filter on, such as `TaskId` on task events; the UI's history filter matches on them.
-- Handlers implement `IDomainEventHandler<TEvent>` (`src/AppTemplate.Api/Actions/Events/IDomainEventHandler.cs`) in the Api. Register one per concrete event type in `src/AppTemplate.Api/Program.cs`, for example `builder.Services.AddScoped<IDomainEventHandler<ProjectRenamed>, NotifyOnRename>();`.
-- Handlers run after the commit, in the same scope, best-effort and in-process (no outbox). A handler failure returns 500 but does not undo the change.
+- Handlers implement `IDomainEventHandler<TEvent>` (`src/AppTemplate.Api/Actions/Events/IDomainEventHandler.cs`) in the Api, carry `[Subscriber("stable-name")]` and register in `src/AppTemplate.Api/Program.cs` with `builder.Services.AddEventHandler<NotifyOnRename>();`.
+- Handlers run after the commit, delivered by the outbox worker in their own scope, at least once and in order per aggregate. A failure is retried with backoff and never affects the execute's response. Make handlers idempotent (AGENTS.md, "Outbox and side effects").
 
 ## Anti-patterns
 

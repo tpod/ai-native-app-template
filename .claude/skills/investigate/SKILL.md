@@ -9,6 +9,8 @@ Work in this order and stop as soon as the cause is clear. Each step narrows the
 
 **No error, but an aggregate is in an unexpected state?** Start with its history: `get_history` with `aggregateType` (e.g. `Project`) and `aggregateId`. Each row shows which action changed it, when, through which channel, the caller's `reason` and the `traceId`. The rows are durable; the trace behind a `traceId` exists only while telemetry is retained. Then continue at step 2 with that `traceId`. A state change missing from history means it bypassed the pipeline, which `StateChangeTests` should have caught.
 
+**A side effect did not happen (a handler or publisher never ran)?** Query `list_outbox_deliveries` with the aggregate's `aggregateType` and `aggregateId`. `pending` with a future `nextAttemptAt` is retrying (read `lastError`); `dead` gave up (read `lastError`, then fix and re-trigger through an action); `pending` with `attempts` 0 behind an earlier row of the same aggregate is waiting its turn. No row at all means the event had no subscriber when it committed: check the `AddEventHandler` / `AddEventPublisher` registration and `get_history` for the event. Each attempt's span, `outbox deliver {subscriber}`, links to the execute's `traceId`.
+
 ## 1. Read the error `code` (and `details`, `suggestion`)
 
 Every error is ProblemDetails JSON, on HTTP (`application/problem+json`) and on MCP (`isError: true`), with `code`, `details`, `suggestion` and `traceId`. The code tells you which layer failed:

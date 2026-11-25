@@ -109,8 +109,20 @@ MCP `structuredContent` is always a JSON object: a list result arrives as `{ "it
 Every committed execute stores each domain event it raised as an append-only row in the `History` table, in the same transaction as the aggregate change. A row holds the event's `[Event]` name and version, the payload, the aggregate type, id and version, the action, the channel (`http`, `mcp` or `in_process`), the MCP client when known, the caller's `reason` and the `traceId`.
 
 - Read it with the `get_history` query (`aggregateType`, `aggregateId`, optional `limit`), oldest first paged with `afterId`, or `newestFirst: true` paged back with `beforeId`.
-- Event names are the history contract: never rename one; bump its version when the payload changes. `EventNameTests` checks they are unique and well formed.
+- Event names are the history contract: never rename one; bump its version when the payload changes. `EventNameTests` checks they are unique and well formed. Drain the outbox before deploying a version bump: a pending handler delivery of the old version is marked dead, never decoded best-effort.
 - A preview, a stale execute and a failed execute write nothing.
+
+## Outbox and side effects
+
+Side effects of a committed action (in-process handlers, external publishers) are delivered through a transactional outbox. Every execute writes one `OutboxDeliveries` row per raised event and subscriber, in the same save as the aggregate and its history; `OutboxWorker` then claims rows (`FOR UPDATE SKIP LOCKED` on Postgres, in `src/AppTemplate.Api/Data/OutboxStore.cs`) and delivers them.
+
+- **Subscribers.** A handler implements `IDomainEventHandler<TEvent>` and registers with `services.AddEventHandler<THandler>()`; a publisher implements `IEventPublisher` (receives an `OutboxEnvelope`) and registers with `services.AddEventPublisher<TPublisher>()`. Both need `[Subscriber("stable-name")]` (`^[a-z0-9-]+$`, unique): the name is the row's key (`handler:<name>`, `publisher:<name>`), so never rename it while rows are pending. A publisher's `[Subscriber(..., Events = [...])]` limits the events it gets.
+- **At least once.** Make every subscriber idempotent. A handler can inject `OutboxDeliveryContext` (`DeliveryId`, `Attempt`); publishers dedupe on `envelope.Id`. A handler that changes state calls an action through `ActionRunner`.
+- **Ordering.** Per subscriber and aggregate: a later event waits until the earlier one is done or dead. Other aggregates and subscribers keep flowing.
+- **Failures.** A throw or a timeout (`Outbox:HandlerTimeout`, 30 s) retries after 10 s, doubling up to 1 h; after 10 attempts the row is `dead`, which unblocks the aggregate's later rows. An unknown subscriber, an unknown event version or an unreadable payload is dead at once. Dead rows are kept; done rows are deleted after 7 days. Settings live in the `Outbox` section (`OutboxOptions`).
+- **Seeing it.** `list_outbox_deliveries` (filters: `status`, `subscriber`, `aggregateType`, `aggregateId`; newest first, `beforeId` paging) shows dead or stuck rows. Each attempt is a span `outbox deliver {subscriber}` linked to the execute's trace.
+- **Tests.** The worker is off in tests (`Outbox:WorkerEnabled=false`). Call `await DrainOutboxAsync()` before asserting on a side effect, and advance `Factory.Time` to reach a retry.
+- **State changes.** `OutboxStore` is the one class besides `ActionPipeline` that `StateChangeTests` lets change rows: outbox rows are delivery bookkeeping, not business state.
 
 ## Errors
 
@@ -183,7 +195,7 @@ dotnet-claude-kit is the base. Where it conflicts with this file, this file wins
 | Hand-rolled `Result` / `Result<T>` | **OneOf** everywhere. Never introduce a `Result` type |
 | FluentValidation via `ValidationFilter<T>` / Mediator `ValidationBehavior`, which throw `ValidationException` | FluentValidation run by the action registry with `ValidateAsync`, **never throwing**. Value objects own the rules through `MustBeValid` |
 | Mediator / MediatR `IRequest` + handlers; `IEndpointGroup` endpoints; `/scaffold` for features | **The action registry.** One `[Action]`/`[Query]` class generates the HTTP + MCP + preview. Never hand-write endpoints or MCP tools for actions. **No `/scaffold`**: use `skill:add-action` |
-| Domain events implement Mediator `INotification` | Our own `IDomainEvent`, handled by `IDomainEventHandler<T>` after commit. Domain depends only on OneOf |
+| Domain events implement Mediator `INotification` | Our own `IDomainEvent`, delivered after commit through the transactional outbox to `IDomainEventHandler<T>` and `IEventPublisher` subscribers (see "Outbox and side effects"). Domain depends only on OneOf |
 | Integration tests on Testcontainers Postgres | In-memory **SQLite** with real migrations for the fast suite; Testcontainers Postgres only in `tests/AppTemplate.Api.PostgresTests`, for provider behaviour. EF `InMemory` stays banned, as in the kit |
 | Clean Architecture in 4 projects (Domain/Application/Infrastructure/Api) | **Domain + Api** (see the architecture map). Judge `/arch-check` against that map |
 | Value objects validate in the constructor; positional records (public constructor) for value objects | `sealed` record with a private constructor + `Create` returning OneOf (golden rule 3). `ValueObjects_AreSealedWithoutPublicParameterizedConstructors` enforces it. Positional records stay fine for DTOs and inputs |

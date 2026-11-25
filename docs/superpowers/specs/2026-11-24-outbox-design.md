@@ -1,6 +1,6 @@
 # Transactional outbox: design
 
-Date: 2026-11-24. Status: draft for approval.
+Date: 2026-11-24. Status: approved; phase 1 (Postgres runtime) and phase 2 (outbox) built, phase 3 (webhooks) next.
 
 ## Intent
 
