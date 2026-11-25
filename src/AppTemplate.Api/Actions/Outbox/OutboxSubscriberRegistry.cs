@@ -14,6 +14,7 @@ public sealed partial class OutboxSubscriberRegistry
 {
     private readonly Dictionary<string, HandlerRegistration> _handlers = new(StringComparer.Ordinal);
     private readonly List<(string Key, HashSet<string>? Events)> _publishers = [];
+    private readonly Dictionary<string, Type> _publisherTypes = new(StringComparer.Ordinal);
     private readonly Dictionary<(string Name, int Version), Type> _eventTypes = [];
     private readonly ConcurrentDictionary<Type, string[]> _handlerKeysByEvent = new();
 
@@ -50,7 +51,9 @@ public sealed partial class OutboxSubscriberRegistry
             }
             else
             {
-                _publishers.Add(($"publisher:{attribute.Name}", attribute.Events is null ? null : new HashSet<string>(attribute.Events, StringComparer.Ordinal)));
+                var key = $"publisher:{attribute.Name}";
+                _publishers.Add((key, attribute.Events is null ? null : new HashSet<string>(attribute.Events, StringComparer.Ordinal)));
+                _publisherTypes[key] = descriptor.ImplementationType;
             }
         }
     }
@@ -70,6 +73,10 @@ public sealed partial class OutboxSubscriberRegistry
 
     public bool TryGetHandler(string key, out HandlerRegistration registration)
         => _handlers.TryGetValue(key, out registration!);
+
+    /// <summary>The <see cref="IEventPublisher"/> class registered under this key.</summary>
+    public bool TryGetPublisher(string key, out Type publisherType)
+        => _publisherTypes.TryGetValue(key, out publisherType!);
 
     /// <summary>The CLR type registered handlers know for this event name and version; null when none does.</summary>
     public Type? EventTypeFor(string eventName, int eventVersion)

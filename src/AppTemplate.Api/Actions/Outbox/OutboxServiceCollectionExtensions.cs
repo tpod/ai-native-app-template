@@ -28,6 +28,15 @@ public static class OutboxServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>Registers an external publisher as an outbox subscriber. The class needs <see cref="SubscriberAttribute"/>.</summary>
+    public static IServiceCollection AddEventPublisher<TPublisher>(this IServiceCollection services, ServiceLifetime lifetime = ServiceLifetime.Scoped)
+        where TPublisher : class, IEventPublisher
+    {
+        services.TryAdd(new ServiceDescriptor(typeof(TPublisher), typeof(TPublisher), lifetime));
+        services.AddSingleton(new SubscriberDescriptor(SubscriberKind.Publisher, typeof(TPublisher), []));
+        return services;
+    }
+
     /// <summary>The subscriber registry, built from every <c>AddEventHandler</c> and <c>AddEventPublisher</c> call.</summary>
     public static IServiceCollection AddOutboxSubscribers(this IServiceCollection services)
     {

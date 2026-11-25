@@ -135,6 +135,11 @@ public sealed partial class OutboxProcessor(
     /// <summary>Resolves the subscriber and decodes the event, or says why this row can never be delivered.</summary>
     private OneOf<Func<IServiceProvider, CancellationToken, Task>, string> Prepare(OutboxDelivery row)
     {
+        if (registry.TryGetPublisher(row.Subscriber, out var publisherType))
+        {
+            return PreparePublish(row, publisherType);
+        }
+
         if (!registry.TryGetHandler(row.Subscriber, out var registration))
         {
             return $"No subscriber '{row.Subscriber}' is registered.";
@@ -165,6 +170,28 @@ public sealed partial class OutboxProcessor(
             HandleOneMethod.MakeGenericMethod(type).CreateDelegate<Func<object, IDomainEvent, CancellationToken, Task>>());
         return (Func<IServiceProvider, CancellationToken, Task>)((services, token) =>
             handle(services.GetRequiredService(registration.HandlerType), domainEvent, token));
+    }
+
+    /// <summary>Publishers get the stored payload as is, so they need no CLR event type and survive version bumps.</summary>
+    private static OneOf<Func<IServiceProvider, CancellationToken, Task>, string> PreparePublish(OutboxDelivery row, Type publisherType)
+    {
+        var entry = row.HistoryEntry;
+        JsonElement data;
+        try
+        {
+            using var document = JsonDocument.Parse(entry.Payload);
+            data = document.RootElement.Clone();
+        }
+        catch (JsonException ex)
+        {
+            return $"Payload of {entry.EventType} v{entry.EventVersion} is not valid JSON: {ex.Message}";
+        }
+
+        var envelope = new OutboxEnvelope(
+            row.Id, entry.EventType, entry.EventVersion, entry.AggregateType, entry.AggregateId, entry.AggregateVersion,
+            entry.OccurredAt, entry.TraceId, data);
+        return (Func<IServiceProvider, CancellationToken, Task>)((services, token) =>
+            ((IEventPublisher)services.GetRequiredService(publisherType)).Publish(envelope, token));
     }
 
     /// <summary>The wait before retry number <paramref name="attempts"/> + 1: the base, doubling, capped.</summary>
