@@ -77,6 +77,7 @@ Skill map:
 
 | Task | Skill |
 |---|---|
+| Discover or model a domain before building it (EventStorming) | `skill:event-storming` |
 | New action or query | `skill:add-action` |
 | New aggregate root | `skill:add-aggregate` |
 | Value objects, domain errors, events | `skill:domain-modeling` |

@@ -58,5 +58,6 @@ Coding agents get step-by-step recipes as skills in `.claude/skills/`:
 
 - `rename-template`: rename the template to your product.
 - `remove-example`: delete the Projects example.
+- `event-storming`: discover and model your domain first, from research and your own schemas, code and docs, into a Brandolini specification.
 - `add-aggregate`, `add-action`: build your own domain.
 - `swap-to-postgres`: move off SQLite.
