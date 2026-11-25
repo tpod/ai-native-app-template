@@ -118,10 +118,10 @@ public sealed partial class ActionPipeline(
     /// </summary>
     /// <remarks>
     /// Order: token signature, action and input hash, expiry, Load (replaying allocated ids), already-executed check,
-    /// version check, Apply, change-set hash, version bump (only when something changed), history rows, save (skipped
-    /// when nothing changed and no event was raised), event dispatch, <c>ToResult</c>. History rows commit in the same
-    /// SaveChanges as the aggregate. Events are dispatched in the execute scope after the commit; a handler exception
-    /// then surfaces as a 500 although the change is already saved (no outbox, by design).
+    /// version check, Apply, change-set hash, version bump (only when something changed), history and outbox rows,
+    /// save (skipped when nothing changed and no event was raised), <c>ToResult</c>. History and outbox rows commit in
+    /// the same SaveChanges as the aggregate; the outbox worker delivers the events to subscribers afterwards, at least
+    /// once, so a subscriber failure never affects the execute's response.
     /// </remarks>
     /// <param name="caller">The channel and client recorded on the history rows.</param>
     public Task<OneOf<ExecuteResponse, AppError>> ExecuteAsync(ActionDescriptor action, JsonElement body, ActionCaller caller, CancellationToken ct)
@@ -245,8 +245,6 @@ public sealed partial class ActionPipeline(
                 throw;
             }
         }
-
-        await services.GetRequiredService<DomainEventDispatcher>().DispatchAsync([.. events.Select(r => r.Event)], ct);
 
         return new ExecuteResponse(action.Name, action.ToResult!(handler, target), changes);
     }

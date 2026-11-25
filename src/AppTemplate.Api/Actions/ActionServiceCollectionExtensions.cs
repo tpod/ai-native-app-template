@@ -64,7 +64,6 @@ public static class ActionServiceCollectionExtensions
         services.TryAddSingleton<ActionMetrics>();
         services.TryAddSingleton<ActionPipeline>();
         services.TryAddSingleton<ActionRunner>();
-        services.TryAddScoped<DomainEventDispatcher>();
         services.AddOutbox();
 
         // One JSON configuration for request bodies, responses and the input hash.

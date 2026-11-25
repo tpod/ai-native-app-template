@@ -1,4 +1,5 @@
 using AppTemplate.Api.Actions.Events;
+using AppTemplate.Api.Data;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace AppTemplate.Api.Actions.Outbox;
@@ -24,14 +25,6 @@ public static class OutboxServiceCollectionExtensions
 
         services.TryAdd(new ServiceDescriptor(typeof(THandler), typeof(THandler), lifetime));
         services.AddSingleton(new SubscriberDescriptor(SubscriberKind.Handler, typeof(THandler), eventTypes));
-
-        // Transitional: the in-process dispatcher still resolves the handler interfaces until the outbox worker lands.
-        foreach (var eventType in eventTypes)
-        {
-            var handlerInterface = typeof(IDomainEventHandler<>).MakeGenericType(eventType);
-            services.Add(new ServiceDescriptor(handlerInterface, sp => sp.GetRequiredService<THandler>(), lifetime));
-        }
-
         return services;
     }
 
@@ -46,6 +39,10 @@ public static class OutboxServiceCollectionExtensions
     {
         services.AddOptions<OutboxOptions>().BindConfiguration(OutboxOptions.Section);
         services.AddOutboxSubscribers();
+        services.TryAddScoped<OutboxStore>();
+        services.TryAddScoped<OutboxDeliveryContext>();
+        services.TryAddSingleton<OutboxProcessor>();
+        services.AddHostedService<OutboxWorker>();
         return services;
     }
 }

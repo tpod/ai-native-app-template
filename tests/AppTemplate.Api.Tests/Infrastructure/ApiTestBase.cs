@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using AppTemplate.Api.Actions.Outbox;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AppTemplate.Api.Tests.Infrastructure;
@@ -67,6 +68,10 @@ public abstract class ApiTestBase : IAsyncLifetime
 
     /// <summary>POST /api/queries/{action} with the input as the body.</summary>
     protected Task<ApiResponse> Query(string action, object input) => Post($"/api/queries/{action}", ToObject(input));
+
+    /// <summary>Delivers every claimable outbox row now. Returns the rows claimed. Advance <c>Factory.Time</c> for retries.</summary>
+    protected Task<int> DrainOutboxAsync()
+        => Factory.Services.GetRequiredService<OutboxProcessor>().DrainAsync(TestContext.Current.CancellationToken);
 
     protected static string TokenOf(ApiResponse preview)
         => preview.Body.GetProperty("previewToken").GetString()

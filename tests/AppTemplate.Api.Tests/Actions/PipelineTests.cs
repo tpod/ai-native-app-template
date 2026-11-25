@@ -27,6 +27,7 @@ public sealed class PipelineTests : ApiTestBase
         TokenOf(p).ShouldNotBeNullOrWhiteSpace();
         p.Body.GetProperty("expiresAt").GetDateTimeOffset().ShouldBe(Factory.Time.GetUtcNow().AddSeconds(300));
         (await Query("fixture_get_note", new { noteId = IdFromChanges(p) })).ShouldFailWith("note.not_found", HttpStatusCode.NotFound);
+        (await DrainOutboxAsync()).ShouldBe(0);
         Factory.Services.GetRequiredService<RecordingEventHandler>().Received.ShouldBeEmpty();
     }
 
@@ -47,6 +48,7 @@ public sealed class PipelineTests : ApiTestBase
         q.ShouldSucceed();
         q.Body.GetProperty("text").GetString().ShouldBe("hello");
 
+        await DrainOutboxAsync();
         var received = Factory.Services.GetRequiredService<RecordingEventHandler>().Received;
         received.Count.ShouldBe(1);
         received[0].ShouldBeOfType<NoteCreated>().NoteId.ShouldBe(Guid.Parse(id));
@@ -63,6 +65,7 @@ public sealed class PipelineTests : ApiTestBase
 
         second.ShouldFailWith("preview.stale", HttpStatusCode.Conflict);
         second.Body.GetProperty("details").GetProperty("reason").GetString().ShouldBe("version_changed");
+        await DrainOutboxAsync();
         Factory.Services.GetRequiredService<RecordingEventHandler>().Received.OfType<NoteEdited>().Count().ShouldBe(1);
     }
 
@@ -75,6 +78,7 @@ public sealed class PipelineTests : ApiTestBase
         var second = await Execute("fixture_create_note", new { text = "hello" }, TokenOf(p));
 
         second.ShouldFailWith("preview.already_executed", HttpStatusCode.Conflict);
+        await DrainOutboxAsync();
         Factory.Services.GetRequiredService<RecordingEventHandler>().Received.OfType<NoteCreated>().Count().ShouldBe(1);
     }
 

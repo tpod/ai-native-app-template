@@ -27,7 +27,12 @@ public sealed class ApiFactory(bool includeFixtures = true, string? webRoot = nu
     public ActivityCapture Activities { get; } = new();
 
     /// <summary>Configuration keys added to the host (in-memory, highest priority). Change them before the host builds.</summary>
-    public Dictionary<string, string?> Settings { get; } = new() { ["Preview:SigningKey"] = SigningKey };
+    /// <remarks>The outbox worker stays idle: tests deliver with <c>DrainOutboxAsync()</c>, deterministically.</remarks>
+    public Dictionary<string, string?> Settings { get; } = new()
+    {
+        ["Preview:SigningKey"] = SigningKey,
+        ["Outbox:WorkerEnabled"] = "false",
+    };
 
     /// <summary>Lets a later task register extra services (for example an <see cref="IModelContributor"/>) before the host builds.</summary>
     public Action<IServiceCollection>? ConfigureTestServices { get; set; }

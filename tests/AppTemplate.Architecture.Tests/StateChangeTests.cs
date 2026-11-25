@@ -22,11 +22,28 @@ public sealed class StateChangeTests
         allowed.Count.ShouldBe(1, $"Expected exactly one save in ActionPipeline, found: {string.Join(", ", allowed.Select(a => a.Call))}");
         allowed[0].Call.ShouldBe("SaveChangesAsync");
 
-        var offenders = hits.Except(allowed).Select(h => $"{h.Method} calls {h.Call}").ToList();
+        var offenders = hits.Except(allowed).Where(h => h.Owner != OutboxStore).Select(h => $"{h.Method} calls {h.Call}").ToList();
         offenders.ShouldBeEmpty(
             "Only ActionPipeline may change state. Call an action (ActionRunner for in-process code) instead:"
             + Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
+
+    /// <summary>
+    /// The one exception: <c>OutboxStore</c> claims and settles outbox delivery rows. They are delivery bookkeeping,
+    /// not business state, and no aggregate or history row is ever changed there.
+    /// </summary>
+    [Fact]
+    public void StateChanges_OnlyOutboxStoreBesidesPipeline()
+    {
+        var hits = Assemblies.SelectMany(StateChangingCalls).ToList();
+
+        var outboxStore = hits.Where(h => h.Owner == OutboxStore).ToList();
+
+        outboxStore.ShouldNotBeEmpty("OutboxStore claims and settles rows; the guard must see those calls.");
+        hits.Where(h => h.Owner is not (nameof(ActionPipeline) or OutboxStore)).ShouldBeEmpty();
+    }
+
+    private const string OutboxStore = "OutboxStore";
 
     /// <summary>Every call to a state-changing EF API in the assembly, outside migrations and the design-time factory.</summary>
     internal static IEnumerable<(string Owner, string Method, string Call)> StateChangingCalls(string assemblyPath)
@@ -74,8 +91,10 @@ public sealed class StateChangeTests
             return false;
         }
 
+        // SqlQuery runs arbitrary SQL, including UPDATE … RETURNING, so it counts as state-changing too.
         return name.StartsWith("ExecuteUpdate", StringComparison.Ordinal)
             || name.StartsWith("ExecuteDelete", StringComparison.Ordinal)
-            || name.StartsWith("ExecuteSql", StringComparison.Ordinal);
+            || name.StartsWith("ExecuteSql", StringComparison.Ordinal)
+            || name.StartsWith("SqlQuery", StringComparison.Ordinal);
     }
 }
