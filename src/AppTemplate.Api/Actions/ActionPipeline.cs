@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using AppTemplate.Api.Actions.Events;
+using AppTemplate.Api.Actions.Outbox;
 using AppTemplate.Api.Actions.Telemetry;
 using AppTemplate.Api.Actions.Preview;
 using AppTemplate.Api.Actions.Validation;
@@ -35,7 +36,8 @@ public sealed partial class ActionPipeline(
     TimeProvider time,
     IOptions<JsonOptions> jsonOptions,
     ILogger<ActionPipeline> logger,
-    ActionMetrics metrics)
+    ActionMetrics metrics,
+    OutboxSubscriberRegistry subscribers)
 {
     /// <summary>Stale reasons reported in <c>details.reason</c> of <c>preview.stale</c>.</summary>
     public static class StaleReasons
@@ -219,7 +221,11 @@ public sealed partial class ActionPipeline(
         // and they commit in the same SaveChanges as the aggregate.
         if (changes.Count > 0 || events.Count > 0)
         {
-            db.History.AddRange(HistoryRows(action, events, caller, reason));
+            var historyRows = HistoryRows(action, events, caller, reason).ToList();
+            db.History.AddRange(historyRows);
+
+            // One outbox row per event and subscriber, committed with the change; the outbox worker delivers them.
+            db.OutboxDeliveries.AddRange(DeliveryRows(events, historyRows));
             try
             {
                 await db.SaveChangesAsync(ct);
@@ -407,6 +413,19 @@ public sealed partial class ActionPipeline(
         }
 
         return roots;
+    }
+
+    /// <summary>One delivery row per (event, subscriber); <paramref name="historyRows"/> pairs with <paramref name="events"/> by index.</summary>
+    private IEnumerable<OutboxDelivery> DeliveryRows(IReadOnlyList<RaisedEvent> events, IReadOnlyList<HistoryEntry> historyRows)
+    {
+        var now = time.GetUtcNow();
+        for (var i = 0; i < events.Count; i++)
+        {
+            foreach (var key in subscribers.KeysFor(events[i].Event.GetType(), historyRows[i].EventType))
+            {
+                yield return new OutboxDelivery(historyRows[i], key, now);
+            }
+        }
     }
 
     /// <summary>One history row per raised event, all sharing the execute's time and execution id.</summary>

@@ -19,6 +19,9 @@ public abstract class AppDbContext(DbContextOptions options, IEnumerable<IModelC
     /// <summary>Append-only business history. Only the action pipeline adds rows.</summary>
     public DbSet<HistoryEntry> History => Set<HistoryEntry>();
 
+    /// <summary>Outbox delivery rows. The pipeline adds them; only <c>OutboxStore</c> changes them afterwards.</summary>
+    public DbSet<OutboxDelivery> OutboxDeliveries => Set<OutboxDelivery>();
+
     internal string ContributorKey => string.Join('|', _contributors.Select(c => c.GetType().AssemblyQualifiedName));
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

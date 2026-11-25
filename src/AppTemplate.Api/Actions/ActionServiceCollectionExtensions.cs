@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AppTemplate.Api.Actions.Events;
+using AppTemplate.Api.Actions.Outbox;
 using AppTemplate.Api.Actions.Preview;
 using AppTemplate.Api.Actions.Telemetry;
 using FluentValidation;
@@ -64,6 +65,7 @@ public static class ActionServiceCollectionExtensions
         services.TryAddSingleton<ActionPipeline>();
         services.TryAddSingleton<ActionRunner>();
         services.TryAddScoped<DomainEventDispatcher>();
+        services.AddOutbox();
 
         // One JSON configuration for request bodies, responses and the input hash.
         // A missing constructor parameter without a default, or null for a non-nullable one, fails deserialization

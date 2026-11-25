@@ -1,9 +1,11 @@
 using AppTemplate.Api.Actions.Events;
+using AppTemplate.Api.Actions.Outbox;
 using AppTemplate.Domain.Common;
 
 namespace AppTemplate.Api.Tests.Fixtures.Notes;
 
-/// <summary>Singleton that records every Note event dispatched after an execute commits.</summary>
+/// <summary>Singleton that records every Note event delivered after an execute commits.</summary>
+[Subscriber("note-recorder")]
 public sealed class RecordingEventHandler : IDomainEventHandler<NoteCreated>, IDomainEventHandler<NoteEdited>
 {
     public List<IDomainEvent> Received { get; } = [];

@@ -83,6 +83,62 @@ namespace AppTemplate.Api.Data.Migrations.Sqlite
                     b.ToTable("History", (string)null);
                 });
 
+            modelBuilder.Entity("AppTemplate.Api.Data.OutboxDelivery", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AggregateId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AggregateType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("HistoryEntryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LeaseUntil")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Subscriber")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HistoryEntryId");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.HasIndex("Subscriber", "AggregateType", "AggregateId", "Id");
+
+                    b.ToTable("OutboxDeliveries", (string)null);
+                });
+
             modelBuilder.Entity("AppTemplate.Domain.Projects.Project", b =>
                 {
                     b.Property<Guid>("Id")
@@ -132,6 +188,17 @@ namespace AppTemplate.Api.Data.Migrations.Sqlite
                     b.HasIndex("ProjectId");
 
                     b.ToTable("TaskItems", (string)null);
+                });
+
+            modelBuilder.Entity("AppTemplate.Api.Data.OutboxDelivery", b =>
+                {
+                    b.HasOne("AppTemplate.Api.Data.HistoryEntry", "HistoryEntry")
+                        .WithMany()
+                        .HasForeignKey("HistoryEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("HistoryEntry");
                 });
 
             modelBuilder.Entity("AppTemplate.Domain.Projects.TaskItem", b =>

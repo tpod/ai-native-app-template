@@ -91,6 +91,64 @@ namespace AppTemplate.Api.Data.Migrations.Postgres
                     b.ToTable("History", (string)null);
                 });
 
+            modelBuilder.Entity("AppTemplate.Api.Data.OutboxDelivery", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AggregateId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("AggregateType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("HistoryEntryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Subscriber")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HistoryEntryId");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.HasIndex("Subscriber", "AggregateType", "AggregateId", "Id");
+
+                    b.ToTable("OutboxDeliveries", (string)null);
+                });
+
             modelBuilder.Entity("AppTemplate.Domain.Projects.Project", b =>
                 {
                     b.Property<Guid>("Id")
@@ -139,6 +197,17 @@ namespace AppTemplate.Api.Data.Migrations.Postgres
                     b.HasIndex("ProjectId");
 
                     b.ToTable("TaskItems", (string)null);
+                });
+
+            modelBuilder.Entity("AppTemplate.Api.Data.OutboxDelivery", b =>
+                {
+                    b.HasOne("AppTemplate.Api.Data.HistoryEntry", "HistoryEntry")
+                        .WithMany()
+                        .HasForeignKey("HistoryEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("HistoryEntry");
                 });
 
             modelBuilder.Entity("AppTemplate.Domain.Projects.TaskItem", b =>

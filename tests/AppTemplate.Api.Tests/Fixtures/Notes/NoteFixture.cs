@@ -1,5 +1,5 @@
 using AppTemplate.Api.Actions;
-using AppTemplate.Api.Actions.Events;
+using AppTemplate.Api.Actions.Outbox;
 using AppTemplate.Api.Data;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
@@ -25,9 +25,7 @@ public static class NoteFixture
         services.AddScoped<IValidator<LockNoteInput>, LockNoteInputValidator>();
         services.AddScoped<IValidator<GetNoteInput>, GetNoteInputValidator>();
 
-        services.AddSingleton<RecordingEventHandler>();
-        services.AddSingleton<IDomainEventHandler<NoteCreated>>(sp => sp.GetRequiredService<RecordingEventHandler>());
-        services.AddSingleton<IDomainEventHandler<NoteEdited>>(sp => sp.GetRequiredService<RecordingEventHandler>());
+        services.AddEventHandler<RecordingEventHandler>(ServiceLifetime.Singleton);
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IModelContributor, NoteModelContributor>());
     }
