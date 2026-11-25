@@ -6,6 +6,7 @@ using AppTemplate.Api.Data;
 using AppTemplate.Domain.Common;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.Options;
+using OneOf;
 
 namespace AppTemplate.Api.Actions.Outbox;
 
@@ -19,7 +20,8 @@ public sealed partial class OutboxProcessor(
     OutboxSubscriberRegistry registry,
     TimeProvider time,
     IOptions<OutboxOptions> options,
-    IOptions<JsonOptions> jsonOptions)
+    IOptions<JsonOptions> jsonOptions,
+    ILogger<OutboxProcessor> logger)
 {
     private const int MaxDrainRounds = 1000;
 
@@ -74,6 +76,11 @@ public sealed partial class OutboxProcessor(
         throw new InvalidOperationException($"The outbox still had claimable rows after {MaxDrainRounds} rounds.");
     }
 
+    /// <summary>
+    /// Delivers one claimed row and settles it: done, retry after backoff, or dead. A row that cannot be delivered at
+    /// all (unknown subscriber or event version, unreadable payload) is dead at once. Host cancellation settles
+    /// nothing: the row stays in flight and is reclaimed when its lease expires.
+    /// </summary>
     private async Task DeliverAsync(OutboxDelivery row, CancellationToken ct)
     {
         await using var scope = scopes.CreateAsyncScope();
@@ -81,30 +88,96 @@ public sealed partial class OutboxProcessor(
         var context = services.GetRequiredService<OutboxDeliveryContext>();
         context.DeliveryId = row.Id;
         context.Attempt = row.Attempts;
-
         var store = services.GetRequiredService<OutboxStore>();
-        await HandleAsync(services, row, ct);
-        await store.CompleteAsync(row.Id, row.Attempts, time.GetUtcNow(), ct);
+
+        if (Prepare(row).TryPickT1(out var undeliverable, out var delivery))
+        {
+            LogDead(row.Id, row.Subscriber, row.HistoryEntry.EventType, undeliverable);
+            await store.MarkDeadAsync(row.Id, row.Attempts, undeliverable, ct);
+            return;
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(Options.HandlerTimeout);
+        string error;
+        try
+        {
+            await delivery(services, timeout.Token);
+            await store.CompleteAsync(row.Id, row.Attempts, time.GetUtcNow(), ct);
+            return;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            error = $"Timed out after {Options.HandlerTimeout}.";
+        }
+#pragma warning disable CA1031 // A subscriber's failure is recorded on its row; it must not stop the batch.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            error = $"{ex.GetType().Name}: {ex.Message}";
+        }
+
+        if (row.Attempts >= Options.MaxAttempts)
+        {
+            LogDead(row.Id, row.Subscriber, row.HistoryEntry.EventType, error);
+            await store.MarkDeadAsync(row.Id, row.Attempts, error, ct);
+        }
+        else
+        {
+            await store.FailAsync(row.Id, row.Attempts, error, time.GetUtcNow() + Backoff(row.Attempts, Options), ct);
+        }
     }
 
-    private async Task HandleAsync(IServiceProvider services, OutboxDelivery row, CancellationToken ct)
+    /// <summary>Resolves the subscriber and decodes the event, or says why this row can never be delivered.</summary>
+    private OneOf<Func<IServiceProvider, CancellationToken, Task>, string> Prepare(OutboxDelivery row)
     {
         if (!registry.TryGetHandler(row.Subscriber, out var registration))
         {
-            throw new InvalidOperationException($"No subscriber '{row.Subscriber}' is registered.");
+            return $"No subscriber '{row.Subscriber}' is registered.";
         }
 
         var entry = row.HistoryEntry;
-        var eventType = registry.EventTypeFor(entry.EventType, entry.EventVersion)
-            ?? throw new InvalidOperationException($"No handler knows event {entry.EventType} v{entry.EventVersion}.");
-        var domainEvent = (IDomainEvent)(JsonSerializer.Deserialize(entry.Payload, eventType, jsonOptions.Value.SerializerOptions)
-            ?? throw new InvalidOperationException($"Event {entry.EventType} v{entry.EventVersion} has an empty payload."));
+        if (registry.EventTypeFor(entry.EventType, entry.EventVersion) is not { } eventType)
+        {
+            return $"No handler knows event {entry.EventType} v{entry.EventVersion}; drain the outbox before bumping an event version.";
+        }
 
-        var handler = services.GetRequiredService(registration.HandlerType);
+        IDomainEvent? domainEvent;
+        try
+        {
+            domainEvent = (IDomainEvent?)JsonSerializer.Deserialize(entry.Payload, eventType, jsonOptions.Value.SerializerOptions);
+        }
+        catch (JsonException ex)
+        {
+            return $"Payload of {entry.EventType} v{entry.EventVersion} is not valid JSON for {eventType.Name}: {ex.Message}";
+        }
+
+        if (domainEvent is null)
+        {
+            return $"Payload of {entry.EventType} v{entry.EventVersion} is empty.";
+        }
+
         var handle = Handlers.GetOrAdd(eventType, static type =>
             HandleOneMethod.MakeGenericMethod(type).CreateDelegate<Func<object, IDomainEvent, CancellationToken, Task>>());
-        await handle(handler, domainEvent, ct);
+        return (Func<IServiceProvider, CancellationToken, Task>)((services, token) =>
+            handle(services.GetRequiredService(registration.HandlerType), domainEvent, token));
     }
+
+    /// <summary>The wait before retry number <paramref name="attempts"/> + 1: the base, doubling, capped.</summary>
+    internal static TimeSpan Backoff(int attempts, OutboxOptions o)
+    {
+        ArgumentNullException.ThrowIfNull(o);
+        var exponent = Math.Clamp(attempts - 1, 0, 30);
+        var ticks = o.BackoffBase.Ticks * Math.Pow(2, exponent);
+        return ticks >= o.BackoffCap.Ticks ? o.BackoffCap : TimeSpan.FromTicks((long)ticks);
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Outbox delivery {DeliveryId} to {Subscriber} of {EventName} is dead: {Reason}")]
+    private partial void LogDead(long deliveryId, string subscriber, string eventName, string reason);
 
     private static Task HandleOne<TEvent>(object handler, IDomainEvent domainEvent, CancellationToken ct)
         where TEvent : IDomainEvent
