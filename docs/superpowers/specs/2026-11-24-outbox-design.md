@@ -178,10 +178,17 @@ Headers: `Webhook-Id` (the delivery id), `Webhook-Timestamp` (unix seconds), `We
 - A separate project, `tests/AppTemplate.Api.PostgresTests`, using `Testcontainers.PostgreSql` and the Postgres migration set. *My call:* a separate project, so selecting or excluding it needs no trait filter and the main suite never needs Docker.
 - It covers: migrations apply cleanly; the claim statement; two concurrent workers never claim the same row; ordering holds under concurrency; lease expiry reclaims an `in_flight` row; one end-to-end execute → delivery.
 
+**Container runtime: Podman on the development machine** (user, 2026-11-25). There is no CI; the Postgres tests run locally.
+
+- Podman is installed from apt, and the rootless API socket is enabled with `systemctl --user enable --now podman.socket`.
+- Testcontainers reaches it through `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock`. The builder checks the Testcontainers for .NET docs on Podman; Ryuk, the resource reaper, may need `TESTCONTAINERS_RYUK_DISABLED=true` or a privileged setting under rootless Podman.
+- The Aspire AppHost's Postgres mode uses `ASPIRE_CONTAINER_RUNTIME=podman`.
+- `scripts/verify.sh` sets `DOCKER_HOST` when it is unset and the Podman socket exists. AGENTS.md documents the one-time setup.
+
 **`scripts/verify.sh`:**
 
-- Runs the Postgres project when `VERIFY_POSTGRES=1`, and then **fails** if Docker is unavailable.
-- Without it, prints `POSTGRES TESTS SKIPPED (set VERIFY_POSTGRES=1)` on its own line before `VERIFY OK`, so a skip is never silent. CI sets `VERIFY_POSTGRES=1`.
+- Runs the Postgres project by default and **fails** when no container runtime is reachable, with a message naming the Podman setup.
+- `VERIFY_POSTGRES=0` skips it and prints `POSTGRES TESTS SKIPPED` on its own line before `VERIFY OK`, so a skip is never silent. *My call:* on by default, because the machine that runs verify now has a runtime.
 
 ### 8. Documentation
 
