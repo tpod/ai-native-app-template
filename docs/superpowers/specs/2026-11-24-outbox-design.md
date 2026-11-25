@@ -18,7 +18,7 @@ Three kinds of subscriber, all on the same queue (user, 2026-11-24):
 - Deliver at least once, with independent retries per subscriber: a dead webhook never delays a local handler.
 - Preserve **per-aggregate ordering per subscriber**: a subscriber never receives an aggregate's event before that aggregate's earlier events (user, 2026-11-24). Other aggregates keep flowing.
 - Run on Postgres with `FOR UPDATE SKIP LOCKED`, so several workers (or several app instances) can drain the queue concurrently.
-- Keep SQLite for most tests and local development; run a focused set of tests on real Postgres through Testcontainers (user, 2026-11-24).
+- Run the app on Postgres everywhere, local development included. Keep SQLite only for the fast test suite, and run a focused set of tests on real Postgres through Testcontainers (user, 2026-11-24 and 2026-11-25).
 - Let runtime agents register and remove webhooks through actions: `create_webhook_subscription`, `delete_webhook_subscription`, `list_webhook_subscriptions` (user chose "B, kept simple until auth", 2026-11-24).
 
 ## Non-goals
@@ -59,10 +59,12 @@ Three kinds of subscriber, all on the same queue (user, 2026-11-24):
 
 ### 1. Database providers
 
-- The provider is chosen by configuration: `Database:Provider` = `sqlite` (default) or `postgres`. `Program.cs` registers `UseSqlite` or `UseNpgsql` accordingly. *Builder's call:* the exact key name.
+- **Postgres is the only runtime database** (user, 2026-11-25). `Program.cs` registers `UseNpgsql` only. **SQLite exists only so the fast test suite can run** without a container: `ApiFactory` replaces the registration with `UseSqlite` on its in-memory connection. There is no provider config switch.
+- Code in `Data/` that differs by provider (the claim statement, §4) picks its implementation from `db.Database.ProviderName`, so tests on SQLite and the app on Postgres share every other line.
 - Two migration sets: `Data/Migrations/Sqlite` and `Data/Migrations/Postgres`, each with its own `DbContext` subclass (`SqliteAppDbContext`, `PostgresAppDbContext`) or migrations assembly, following the EF Core docs on multiple providers. Look this up on Microsoft Learn before choosing. Every schema change from now on is generated for both; the `ef-core` skill and AGENTS.md Commands table say so.
 - The Postgres set starts with a new initial migration covering the existing tables (`Projects`, tasks, `History`). The `NOCASE` collation on `ProjectName` becomes `citext` or an ICU collation on Postgres, as `skill:swap-to-postgres` describes. That skill is reused for this part but SQLite is kept, not removed.
-- **AppHost stays on SQLite by default** (*my call*: this machine has no Docker). A Postgres AppHost mode (`AddPostgres(...).AddDatabase("appdb")`) is selected by an AppHost parameter or launch profile. Production is expected to run Postgres.
+- **The AppHost runs Postgres** (user, 2026-11-25): `AddPostgres("postgres").WithDataVolume().AddDatabase("appdb")` replaces `AddSqlite`, so local data survives restarts. The container runs on Podman (`ASPIRE_CONTAINER_RUNTIME=podman`, set in the AppHost's launch profile). The SQLite `app.db` file and its gitignore note go away. Migrations are applied on AppHost start in Development only, as `Program.cs` does today; the builder checks what it does and keeps it to Development.
+- The design-time factory (`AppDbContextDesignTimeFactory`) creates the Postgres context. The SQLite migration set is generated through the SQLite context subclass.
 
 ### 2. Subscribers
 
@@ -182,7 +184,7 @@ Headers: `Webhook-Id` (the delivery id), `Webhook-Timestamp` (unix seconds), `We
 
 - Podman is installed from apt, and the rootless API socket is enabled with `systemctl --user enable --now podman.socket`.
 - Testcontainers reaches it through `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock`. The builder checks the Testcontainers for .NET docs on Podman; Ryuk, the resource reaper, may need `TESTCONTAINERS_RYUK_DISABLED=true` or a privileged setting under rootless Podman.
-- The Aspire AppHost's Postgres mode uses `ASPIRE_CONTAINER_RUNTIME=podman`.
+- The Aspire AppHost uses `ASPIRE_CONTAINER_RUNTIME=podman`, so `dotnet run --project src/AppTemplate.AppHost` now needs Podman too.
 - `scripts/verify.sh` sets `DOCKER_HOST` when it is unset and the Podman socket exists. AGENTS.md documents the one-time setup.
 
 **`scripts/verify.sh`:**
