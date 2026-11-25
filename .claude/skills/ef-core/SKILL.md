@@ -7,7 +7,7 @@ description: Use when mapping an aggregate or value object with EF Core, adding 
 
 Base: `dotnet-claude-kit:ef-core`. Differences in this template:
 
-- **SQLite in v1**, through `CommunityToolkit.Aspire.Hosting.SQLite` in the AppHost and `UseSqlite` in `src/AppTemplate.Api/Program.cs`. Postgres only via `skill:swap-to-postgres`.
+- **Postgres at runtime, SQLite for the fast tests.** `src/AppTemplate.Api/Program.cs` registers `PostgresAppDbContext` with `UseNpgsql`; `ApiFactory` swaps in `SqliteAppDbContext`. Every schema change needs a migration for both: run `scripts/add-migration.sh <Name>`. `ProviderModelTests` fails when one set is missing or the two models differ.
 - **Tests run on in-memory SQLite with the real migrations** (`tests/AppTemplate.Api.Tests/Infrastructure/SqliteTestDatabase.cs`), not Testcontainers. The EF `InMemory` provider is banned (`NoAssembly_ReferencesEfCoreInMemory`).
 - **No repositories.** Handlers use `ctx.Db` (`AppDbContext`) directly. Shared reads go in a static `<Aggregate>Lookup` class next to the actions (`src/AppTemplate.Api/Features/Projects/ProjectLookup.cs`).
 - **Handlers never call `SaveChanges`.** The action pipeline saves on execute only, after it checks the preview token.
@@ -19,11 +19,13 @@ Where the kit agrees, follow it: `IEntityTypeConfiguration<T>`, no lazy loading,
 
 | What | File |
 |---|---|
-| DbContext and DbSets | `src/AppTemplate.Api/Data/AppDbContext.cs` |
+| DbContext and DbSets (abstract base everything injects) | `src/AppTemplate.Api/Data/AppDbContext.cs` |
+| Provider contexts: Postgres (the app), SQLite (the fast tests) | `src/AppTemplate.Api/Data/PostgresAppDbContext.cs`, `src/AppTemplate.Api/Data/SqliteAppDbContext.cs` |
+| Case-insensitive text, translated per provider | `src/AppTemplate.Api/Data/CaseInsensitiveText.cs` |
 | One configuration per aggregate | `src/AppTemplate.Api/Data/<Aggregate>Configuration.cs`, like `src/AppTemplate.Api/Data/ProjectConfiguration.cs` |
 | VO converter convention | `src/AppTemplate.Api/Data/ValueObjectConventions.cs` |
-| Design-time factory (used by dotnet-ef) | `src/AppTemplate.Api/Data/AppDbContextDesignTimeFactory.cs` |
-| Migrations | `src/AppTemplate.Api/Data/Migrations/` |
+| Design-time factories (used by dotnet-ef) | `src/AppTemplate.Api/Data/PostgresDesignTimeFactory.cs`, `src/AppTemplate.Api/Data/SqliteDesignTimeFactory.cs` |
+| Migrations, one set per provider (add both with `scripts/add-migration.sh <Name>`) | `src/AppTemplate.Api/Data/Migrations/Postgres/`, `src/AppTemplate.Api/Data/Migrations/Sqlite/` |
 | Test-only entities (fixtures) | `IModelContributor` (`src/AppTemplate.Api/Data/IModelContributor.cs`); not in migrations |
 
 `AppDbContext.OnModelCreating` calls `ApplyConfigurationsFromAssembly`, so a new configuration class is picked up automatically. Add a `DbSet<T>` property only for aggregate roots: `public DbSet<Project> Projects => Set<Project>();`.
@@ -71,7 +73,7 @@ dotnet tool run dotnet-ef migrations add <Name> -p src/AppTemplate.Api -o Data/M
 
 ## Postgres-portable rule
 
-Keep provider details inside `src/AppTemplate.Api/Data`. Feature and domain code never use `EF.Functions` provider-specific functions, raw SQL, `FromSql` or collation names. Today there is exactly one SQLite-specific setting: `UseCollation("NOCASE")` on `Project.Name`, marked with a comment and covered by `skill:swap-to-postgres`. Any new provider-specific setting gets the same comment and a line in that skill.
+Keep provider details inside `src/AppTemplate.Api/Data`. Feature and domain code never use `EF.Functions` provider-specific functions, raw SQL, `FromSql` or collation names. Configurations stay provider-neutral: they run for both contexts. Case-insensitive text is `.IsCaseInsensitive()` (`CaseInsensitiveText`), which `PostgresAppDbContext` maps to `citext` and `SqliteAppDbContext` to the `NOCASE` collation. A new provider-specific need follows the same pattern: a neutral annotation in the configuration, translated in each provider context's `OnModelCreating`, with a `ProviderModelTests` case.
 
 Case-insensitive comparisons belong in the column definition (collation), not in `ToLower()` calls in queries.
 

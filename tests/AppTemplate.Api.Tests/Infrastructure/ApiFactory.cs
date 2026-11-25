@@ -3,6 +3,7 @@ using AppTemplate.Api.Tests.Fixtures.Notes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -48,10 +49,16 @@ public sealed class ApiFactory(bool includeFixtures = true, string? webRoot = nu
         });
         builder.ConfigureServices(services =>
         {
-            services.RemoveAll<DbContextOptions<AppDbContext>>();
+            // The app registers Postgres; the fast suite swaps in SQLite. Remove every piece of the Postgres
+            // registration, including EF 10's IDbContextOptionsConfiguration, so Npgsql is never configured.
+            services.RemoveAll<AppDbContext>();
+            services.RemoveAll<PostgresAppDbContext>();
+            services.RemoveAll<DbContextOptions<PostgresAppDbContext>>();
+            services.RemoveAll<IDbContextOptionsConfiguration<PostgresAppDbContext>>();
             services.RemoveAll<DbContextOptions>();
-            services.AddScoped(_ => new DbContextOptionsBuilder<AppDbContext>().UseSqlite(_database.Connection).Options);
-            services.AddScoped<DbContextOptions>(sp => sp.GetRequiredService<DbContextOptions<AppDbContext>>());
+            services.AddScoped(_ => new DbContextOptionsBuilder<SqliteAppDbContext>().UseSqlite(_database.Connection).Options);
+            services.AddScoped<DbContextOptions>(sp => sp.GetRequiredService<DbContextOptions<SqliteAppDbContext>>());
+            services.AddScoped<AppDbContext, SqliteAppDbContext>();
 
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Time);

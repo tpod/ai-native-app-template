@@ -26,7 +26,7 @@ public sealed partial class SkillLintTests
     private static readonly string[] ExpectedSkills =
     [
         "domain-modeling", "ef-core", "tdd", "add-action", "add-aggregate", "change-action-contract",
-        "frontend-feature", "investigate", "remove-example", "rename-template", "swap-to-postgres",
+        "frontend-feature", "investigate", "remove-example", "rename-template",
     ];
 
     private static readonly HashSet<string> VendoredSkills = new(StringComparer.Ordinal) { "shadcn" };

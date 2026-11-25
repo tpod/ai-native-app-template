@@ -8,7 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlite(builder.Configuration.GetConnectionString("appdb")));
+builder.Services.AddDbContext<AppDbContext, PostgresAppDbContext>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("appdb")));
 
 builder.Services.AddAppProblemDetails();
 builder.Services.AddActions();

@@ -13,8 +13,8 @@ internal sealed class SqliteTestDatabase : IDisposable
 
     public AppDbContext NewContext(params IModelContributor[] contributors)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(Connection).Options;
-        return new AppDbContext(options, contributors);
+        var options = new DbContextOptionsBuilder<SqliteAppDbContext>().UseSqlite(Connection).Options;
+        return new SqliteAppDbContext(options, contributors);
     }
 
     /// <summary>Applies EF migrations with the base model, then runs each contributor's raw DDL.</summary>

@@ -13,8 +13,8 @@ internal sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.Property(p => p.Id).ValueGeneratedNever();
         builder.Property(p => p.Version).IsConcurrencyToken();
 
-        // SQLite-specific: case-insensitive names. See swap-to-postgres.
-        builder.Property(p => p.Name).IsRequired().HasMaxLength(ProjectName.MaxLength).UseCollation("NOCASE");
+        // Case-insensitive names; each provider context translates this (citext on Postgres, NOCASE on SQLite).
+        builder.Property(p => p.Name).IsRequired().HasMaxLength(ProjectName.MaxLength).IsCaseInsensitive();
         builder.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
         builder.HasIndex(p => new { p.Name, p.Status });
 

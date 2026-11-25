@@ -86,21 +86,21 @@ Eight guards assert that the collection they check is non-empty, so an empty loo
 
 | Guard | Runs when |
 |---|---|
-| `DomainEntities_HaveNoPublicSetters`, `ValueObjects_AreSealedWithoutPublicParameterizedConstructors`, `AggregateRoots_VersionIsConcurrencyToken`, `DomainEvents_AllHaveEventAttribute`, `EventNames_AreUniqueAndWellFormed` | the Domain assembly has a concrete subclass of `AggregateRoot<>` (`DomainHasAggregate`) |
+| `DomainEntities_HaveNoPublicSetters`, `ValueObjects_AreSealedWithoutPublicParameterizedConstructors`, `AggregateRoots_VersionIsConcurrencyToken`, `DomainEvents_AllHaveEventAttribute`, `EventNames_AreUniqueAndWellFormed`, `CaseInsensitiveText_IsMappedOnBothProviders` | the Domain assembly has a concrete subclass of `AggregateRoot<>` (`DomainHasAggregate`) |
 | `Registry_ApiAssembly_BuildsWithoutViolations`, `EveryAction_HasMatchingTestsClass`, `EveryAction_HasCoversForHappyPathEachErrorAndStale` | the Api assembly has a type marked `[Action]` or `[Query]` (`ApiHasActions`) |
 
-After this skill, the five aggregate guards report as skipped with "No aggregate in the Domain yet; …". The three action guards keep running and pass, because the framework's `get_history` query stays and is covered by `GetHistoryTests`. The first aggregate you add turns the skipped guards back on, and they must then pass.
+After this skill, the six aggregate guards report as skipped with "No aggregate in the Domain yet; …". The three action guards keep running and pass, because the framework's `get_history` query stays and is covered by `GetHistoryTests`. The first aggregate you add turns the skipped guards back on, and they must then pass.
 
 ## 5. Re-add the `InitialCreate` migration
 
 ```bash
 dotnet build AppTemplate.slnx
-dotnet tool run dotnet-ef migrations add InitialCreate -p src/AppTemplate.Api -o Data/Migrations
+scripts/add-migration.sh InitialCreate
 ```
 
 The build must report `0 Warning(s)` and `0 Error(s)`; it also proves steps 2 to 4 compile. Do not skip it: in a fresh clone the projects are not restored yet, and dotnet-ef then fails with `NETSDK1004: Assets file … project.assets.json not found`.
 
-Expected from dotnet-ef: `Build succeeded.` then `Done.`, and three new files in `src/AppTemplate.Api/Data/Migrations/` (`<timestamp>_InitialCreate.cs`, its `.Designer.cs` and `AppDbContextModelSnapshot.cs`). `Up` creates only the `History` table, the one framework entity. That is correct: the first aggregate's tables come with your first aggregate's migration.
+Expected from dotnet-ef, once per provider: `Build succeeded.` then `Done.`. Each of `src/AppTemplate.Api/Data/Migrations/Postgres/` and `src/AppTemplate.Api/Data/Migrations/Sqlite/` gets three new files (`<timestamp>_InitialCreate.cs`, its `.Designer.cs` and `PostgresAppDbContextModelSnapshot.cs` or `SqliteAppDbContextModelSnapshot.cs`). `Up` creates only the `History` table, the one framework entity. That is correct: the first aggregate's tables come with your first aggregate's migration.
 
 ## 6. Regenerate the OpenAPI snapshot
 
@@ -184,7 +184,6 @@ Both must exit 0 with no output beyond the script banners.
 
 1. In the architecture map, delete the line `    Projects/                   # the example aggregate (remove with skill:remove-example)`.
 2. Under "Errors", replace "See `src/AppTemplate.Domain/Projects/ProjectErrors.cs`." with "See `src/AppTemplate.Domain/Common/ValidationFailed.cs`.".
-3. Under "Swap to Postgres", delete the last sentence, which starts "The `NOCASE` collation on `ProjectName`".
 
 The other Projects names in `AGENTS.md` and in `.claude/rules/` (`rename_project`, `ProjectName.Create`, `project.name_taken`) are illustrations of the patterns and stay valid as such. `git grep -n -i project -- AGENTS.md .claude/rules` lists them; rewrite them for your own aggregate when you have one.
 

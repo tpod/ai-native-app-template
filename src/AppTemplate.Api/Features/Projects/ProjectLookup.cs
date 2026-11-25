@@ -15,8 +15,8 @@ internal static class ProjectLookup
     }
 
     /// <summary>
-    /// The id of the active project that holds this name, or null. The column's NOCASE collation makes the
-    /// comparison case-insensitive, and <see cref="ProjectName"/> is already trimmed.
+    /// The id of the active project that holds this name, or null. The column is mapped case-insensitive
+    /// (<c>IsCaseInsensitive()</c> in <c>ProjectConfiguration</c>), so the comparison ignores case, and <see cref="ProjectName"/> is already trimmed.
     /// </summary>
     public static Task<ProjectId?> FindNameHolder(ProjectName name, ActionContext ctx)
         => ctx.Db.Projects

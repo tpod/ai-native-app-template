@@ -25,7 +25,7 @@ dotnet_style_qualification_for_property = false:suggestion
 dotnet_style_qualification_for_method = false:suggestion
 dotnet_style_qualification_for_event = false:suggestion
 
-[**/Migrations/*.cs]
+[**/Migrations/**.cs]
 generated_code = true
 
 [tests/**.cs]
