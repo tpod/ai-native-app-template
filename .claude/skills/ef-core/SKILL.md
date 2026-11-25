@@ -8,7 +8,7 @@ description: Use when mapping an aggregate or value object with EF Core, adding 
 Base: `dotnet-claude-kit:ef-core`. Differences in this template:
 
 - **Postgres at runtime, SQLite for the fast tests.** `src/AppTemplate.Api/Program.cs` registers `PostgresAppDbContext` with `UseNpgsql`; `ApiFactory` swaps in `SqliteAppDbContext`. Every schema change needs a migration for both: run `scripts/add-migration.sh <Name>`. `ProviderModelTests` fails when one set is missing or the two models differ.
-- **Tests run on in-memory SQLite with the real migrations** (`tests/AppTemplate.Api.Tests/Infrastructure/SqliteTestDatabase.cs`), not Testcontainers. The EF `InMemory` provider is banned (`NoAssembly_ReferencesEfCoreInMemory`).
+- **The fast tests run on in-memory SQLite with the real SQLite migrations** (`tests/AppTemplate.Api.Tests/Infrastructure/SqliteTestDatabase.cs`). The Postgres migrations and provider behaviour are tested in `tests/AppTemplate.Api.PostgresTests` (Testcontainers on Podman). The EF `InMemory` provider is banned (`NoAssembly_ReferencesEfCoreInMemory`).
 - **No repositories.** Handlers use `ctx.Db` (`AppDbContext`) directly. Shared reads go in a static `<Aggregate>Lookup` class next to the actions (`src/AppTemplate.Api/Features/Projects/ProjectLookup.cs`).
 - **Handlers never call `SaveChanges`.** The action pipeline saves on execute only, after it checks the preview token.
 - **Single-value VOs are mapped by convention**, not per property.
@@ -62,8 +62,10 @@ builder.Navigation(p => p.Tasks).UsePropertyAccessMode(PropertyAccessMode.Field)
 Run `dotnet tool restore` once per clone. dotnet-ef needs restored projects, so in a fresh clone run `dotnet build AppTemplate.slnx` first, or it fails with `NETSDK1004`. Then, from the repo root:
 
 ```bash
-dotnet tool run dotnet-ef migrations add <Name> -p src/AppTemplate.Api -o Data/Migrations
+scripts/add-migration.sh <Name>
 ```
+
+It runs dotnet-ef once per provider (`--context PostgresAppDbContext` into `Data/Migrations/Postgres`, `--context SqliteAppDbContext` into `Data/Migrations/Sqlite`). Read both generated migrations.
 
 - Name it for the change (`AddProjectDescription`), never `Update1`.
 - Read the generated `Up` and `Down` before committing. Check that nothing is dropped that should be renamed.

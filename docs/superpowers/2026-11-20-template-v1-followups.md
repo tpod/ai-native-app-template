@@ -5,7 +5,7 @@ These are Minor findings from the per-task reviews and the final whole-branch re
 ## Not verified in v1
 
 - **UI:** no browser was available, so the UI was never checked visually. The same flows were exercised over HTTP through the Vite proxy.
-- **`skill:swap-to-postgres`:** never dry-run, because there is no Docker and the Npgsql packages aren't cached.
+- **`skill:swap-to-postgres`:** resolved 2026-11-25. The template now runs Postgres on Podman, and the skill is removed (see AGENTS.md, "Databases").
 - **`NoAssembly_ReferencesEfCoreInMemory`:** never shown to fail on a real violation, because the InMemory package isn't in the offline cache.
 
 ## Framework: actions, preview, errors
@@ -75,7 +75,7 @@ These are Minor findings from the per-task reviews and the final whole-branch re
 - `RenameProject` repeats the same-name rule in the action. The domain should signal "unchanged".
 - Summaries use `input.Trim()` instead of the value object's value.
 - `ProjectDto.Tasks` order is undefined. Order by `Id`, which is a v7 Guid.
-- Name uniqueness relies on `NOCASE` with no unique index, so concurrent creates can race.
+- Name uniqueness relies on case-insensitive text (`citext` / `NOCASE`) with no unique index, so concurrent creates can race.
 
 ## Web
 
