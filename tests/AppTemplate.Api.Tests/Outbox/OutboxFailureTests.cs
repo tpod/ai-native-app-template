@@ -149,6 +149,57 @@ public sealed class OutboxFailureTests : OutboxTestBase
     }
 
     [Fact]
+    public async Task Drain_RowFailsBeforeDelivery_OtherRowsStillDelivered()
+    {
+        await CreateNote("first");
+        await CreateNote("second");
+        var firstHistoryId = (await Deliveries())[0].HistoryEntryId;
+        await WithDb(db => db.History.Where(h => h.Id == firstHistoryId)
+            .ExecuteUpdateAsync(s => s.SetProperty(h => h.TraceId, new string('z', 32)), Ct));
+
+        await DrainOutboxAsync();
+
+        (await Deliveries()).Where(d => d.HistoryEntryId != firstHistoryId).ShouldAllBe(d => d.Status == OutboxStatus.Done);
+        Recorder.Received.OfType<NoteCreated>().Select(e => e.Text).ShouldContain("second");
+    }
+
+    [Fact]
+    public async Task Drain_RowReclaimedPastMaxAttempts_MarksDeadWithoutDelivering()
+    {
+        await CreateNote("a");
+        await WithDb(db => db.OutboxDeliveries.Where(d => d.Subscriber == FlakyKey)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.Attempts, 10), Ct));
+
+        await DrainOutboxAsync();
+
+        var row = await Delivery(FlakyKey);
+        row.Status.ShouldBe(OutboxStatus.Dead);
+        row.Attempts.ShouldBe(11);
+        Flaky.Received.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Drain_LeaseLostWhileWaitingInBatch_SkipsRowAnotherWorkerReclaimed()
+    {
+        await CreateNote("first");
+        await CreateNote("second");
+        Flaky.OnFirstHandle = async () =>
+        {
+            // While this batch's first row runs, its other leases expire and another worker reclaims them.
+            Factory.Time.Advance(TimeSpan.FromSeconds(70));
+            var now = Factory.Time.GetUtcNow();
+            await WithStore(store => store.ClaimAsync(10, now, now.AddSeconds(60), Ct));
+        };
+
+        await DrainOutboxAsync();
+
+        Recorder.Received.ShouldBeEmpty();
+        var reclaimed = (await Deliveries()).Skip(1).ToList();
+        reclaimed.Count.ShouldBe(3);
+        reclaimed.ShouldAllBe(d => d.Status == OutboxStatus.InFlight && d.Attempts == 2);
+    }
+
+    [Fact]
     public async Task Retention_DoneRowsOlderThanRetention_AreDeleted()
     {
         await CreateNote("a");

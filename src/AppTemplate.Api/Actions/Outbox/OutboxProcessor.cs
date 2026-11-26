@@ -54,7 +54,21 @@ public sealed partial class OutboxProcessor(
 
         foreach (var row in rows)
         {
-            await DeliverAsync(row, ct);
+            try
+            {
+                await DeliverAsync(row, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+#pragma warning disable CA1031 // One row's unexpected failure must not stop the rest of the batch.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                // The row stays in flight; its lease expires, it is reclaimed and, past MaxAttempts, dies.
+                LogRowFailed(ex, row.Id, row.Subscriber);
+            }
         }
 
         return rows.Count;
@@ -92,7 +106,22 @@ public sealed partial class OutboxProcessor(
         context.DeliveryId = row.Id;
         context.Attempt = row.Attempts;
         var store = services.GetRequiredService<OutboxStore>();
+
+        // The batch's lease ran from claim time; a row late in a slow batch may have lost it to another worker.
+        if (await store.RenewLeaseAsync(row.Id, row.Attempts, time.GetUtcNow() + Options.LeaseDuration, ct) == 0)
+        {
+            LogLeaseLost(row.Id, row.Subscriber);
+            return;
+        }
+
         using var activity = StartSpan(row);
+
+        // A row that keeps crashing the worker before it can settle is reclaimed over and over; stop it here.
+        if (row.Attempts > Options.MaxAttempts)
+        {
+            await DeadAsync(store, row, $"Exceeded {Options.MaxAttempts} attempts without settling.", activity, ct);
+            return;
+        }
 
         if (Prepare(row).TryPickT1(out var undeliverable, out var delivery))
         {
@@ -105,7 +134,8 @@ public sealed partial class OutboxProcessor(
         string error;
         try
         {
-            await delivery(services, timeout.Token);
+            // WaitAsync stops waiting at the timeout even when the subscriber ignores its token.
+            await delivery(services, timeout.Token).WaitAsync(timeout.Token);
             var now = time.GetUtcNow();
             await store.CompleteAsync(row.Id, row.Attempts, now, ct);
             Settle(activity, OutboxTelemetry.OutcomeDone, error: null, lag: now - row.HistoryEntry.OccurredAt);
@@ -149,7 +179,7 @@ public sealed partial class OutboxProcessor(
     {
         var entry = row.HistoryEntry;
         ActivityLink[]? links = null;
-        if (entry.TraceId is { Length: 32 } traceId)
+        if (entry.TraceId is { Length: 32 } traceId && traceId.All(char.IsAsciiHexDigitLower))
         {
             // History keeps only the trace id, so the link points at the trace rather than a specific span.
             links = [new ActivityLink(new ActivityContext(ActivityTraceId.CreateFromString(traceId), default, ActivityTraceFlags.None))];
@@ -199,9 +229,11 @@ public sealed partial class OutboxProcessor(
         {
             domainEvent = (IDomainEvent?)JsonSerializer.Deserialize(entry.Payload, eventType, jsonOptions.Value.SerializerOptions);
         }
-        catch (JsonException ex)
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or InvalidOperationException or ArgumentException)
         {
-            return $"Payload of {entry.EventType} v{entry.EventVersion} is not valid JSON for {eventType.Name}: {ex.Message}";
+            // JsonException: malformed or mismatched payload. The others: an event type the serializer cannot
+            // construct (for example a value-object property without a usable constructor).
+            return $"Payload of {entry.EventType} v{entry.EventVersion} cannot be read as {eventType.Name}: {ex.GetType().Name}: {ex.Message}";
         }
 
         if (domainEvent is null)
@@ -245,6 +277,12 @@ public sealed partial class OutboxProcessor(
         var ticks = o.BackoffBase.Ticks * Math.Pow(2, exponent);
         return ticks >= o.BackoffCap.Ticks ? o.BackoffCap : TimeSpan.FromTicks((long)ticks);
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Outbox delivery {DeliveryId} to {Subscriber} failed before it could settle; it stays in flight until its lease expires")]
+    private partial void LogRowFailed(Exception exception, long deliveryId, string subscriber);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Outbox delivery {DeliveryId} to {Subscriber} lost its lease while waiting in the batch; another worker has it")]
+    private partial void LogLeaseLost(long deliveryId, string subscriber);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Outbox delivery {DeliveryId} to {Subscriber} of {EventName} is dead: {Reason}")]
     private partial void LogDead(long deliveryId, string subscriber, string eventName, string reason);

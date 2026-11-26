@@ -61,6 +61,13 @@ public sealed class OutboxStore(AppDbContext db)
     // Each settle is guarded by the attempt it claimed: a worker whose lease expired and whose row was reclaimed
     // cannot overwrite the newer attempt's outcome.
 
+    /// <summary>
+    /// Extends a claimed row's lease just before its delivery starts. 0 means the lease was lost (another worker
+    /// reclaimed the row after it expired while it waited in this batch): skip it.
+    /// </summary>
+    public Task<int> RenewLeaseAsync(long id, int attempt, DateTimeOffset leaseUntil, CancellationToken ct)
+        => InFlight(id, attempt).ExecuteUpdateAsync(s => s.SetProperty(d => d.LeaseUntil, leaseUntil), ct);
+
     public Task<int> CompleteAsync(long id, int attempt, DateTimeOffset now, CancellationToken ct)
         => InFlight(id, attempt).ExecuteUpdateAsync(
             s => s.SetProperty(d => d.Status, OutboxStatus.Done).SetProperty(d => d.CompletedAt, now).SetProperty(d => d.LeaseUntil, (DateTimeOffset?)null),

@@ -19,6 +19,12 @@ public sealed class FlakyNoteHandler : IDomainEventHandler<NoteCreated>, IDomain
     /// <summary>Wait until cancelled instead of returning.</summary>
     public bool Hang { get; set; }
 
+    /// <summary>Wait this long without honouring the token, like a non-cancellable SDK call.</summary>
+    public TimeSpan? HangIgnoringToken { get; set; }
+
+    /// <summary>Runs once, on the first delivery, before the handler's own behaviour.</summary>
+    public Func<Task>? OnFirstHandle { get; set; }
+
     /// <summary>Completes when a delivery starts, so a test can act while the handler runs.</summary>
     public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -30,7 +36,18 @@ public sealed class FlakyNoteHandler : IDomainEventHandler<NoteCreated>, IDomain
 
     private async Task Run(IDomainEvent domainEvent, bool alwaysFail, CancellationToken ct)
     {
-        Started.TrySetResult();
+        if (Started.TrySetResult() && OnFirstHandle is { } onFirst)
+        {
+            await onFirst();
+        }
+
+        if (HangIgnoringToken is { } ignoring)
+        {
+#pragma warning disable CA2016 // Deliberately ignores the token.
+            await Task.Delay(ignoring);
+#pragma warning restore CA2016
+        }
+
         if (Hang)
         {
             await Task.Delay(Timeout.Infinite, ct);

@@ -40,6 +40,22 @@ public sealed class OutboxTimeoutTests : OutboxTestBase
     }
 
     [Fact]
+    public async Task Drain_HandlerIgnoresToken_TimesOutAndMovesOn()
+    {
+        Flaky.HangIgnoringToken = TimeSpan.FromSeconds(30);
+        await CreateNote("a");
+        var started = DateTimeOffset.UtcNow;
+
+        await DrainOutboxAsync();
+
+        (DateTimeOffset.UtcNow - started).ShouldBeLessThan(TimeSpan.FromSeconds(10));
+        var row = await Delivery("handler:note-flaky");
+        row.Status.ShouldBe(OutboxStatus.Pending);
+        row.LastError.ShouldNotBeNull().ShouldContain("timed out");
+        (await Delivery("handler:note-recorder")).Status.ShouldBe(OutboxStatus.Done);
+    }
+
+    [Fact]
     public async Task Deliver_HostCancelled_LeavesRowInFlight()
     {
         Flaky.Hang = true;
